@@ -91,7 +91,7 @@ namespace MacroOsHumildes
     {
         private const string GITHUB_USER = "Bruno-Martins-tech";
         private const string GITHUB_REPO = "macro-os-humildes";
-        private const string CURRENT_VERSION = "1.1.0";
+        private const string CURRENT_VERSION = "1.2.0";
         private static readonly string API_URL = $"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/releases/latest";
 
         public static async Task<(bool temUpdate, string versaoNova, string downloadUrl)?> ChecarAtualizacao()
@@ -649,7 +649,7 @@ namespace MacroOsHumildes
                 // Subtitulo com referencia WYD
                 using var fontSub = new Font("Segoe UI", 8.5f);
                 using var brushSub = new SolidBrush(Color.FromArgb(212, 175, 55)); // dourado
-                g.DrawString("With Your Destiny \u2022 Guilda Os Humildes", fontSub, brushSub, bx + bw + 16, by + 24);
+                g.DrawString("With Your Destiny \u2022 Guilda Os Humildes \u2022 Server 3", fontSub, brushSub, bx + bw + 16, by + 24);
 
                 // Citacao nordica
                 using var fontCit = new Font("Segoe UI", 7.5f, FontStyle.Italic);
