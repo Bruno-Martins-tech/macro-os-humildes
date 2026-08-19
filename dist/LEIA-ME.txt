@@ -1,0 +1,36 @@
+============================================
+   MACRO OS HUMILDES - Guilda Os Humildes
+   WYD Global - Server 3
+   Criado por MartinS-
+============================================
+
+COMO USAR:
+
+1. Extraia o arquivo MacroOsHumildes.exe para qualquer pasta
+2. Clique 2x no MacroOsHumildes.exe
+3. Vai aparecer um aviso do Windows (UAC) - clique SIM
+4. Se aparecer o SmartScreen ("app desconhecido"):
+   - Clique em "Mais informacoes"
+   - Clique em "Executar assim mesmo"
+   (isso e normal pra apps sem assinatura digital)
+5. Pronto! O app ja vem com os macros configurados
+
+ATALHOS (funcionam com o WYD aberto):
+
+F5       - Liga/desliga Auto Pergaminho
+F6       - Liga/desliga Auto Montaria
+F7       - Liga/desliga Auto Chat (ja vem pronto)
+F8       - Liga/desliga Auto-uso de item
+F9       - Iniciar/parar gravacao
+Ctrl+F12 - PARAR TUDO (botao de panico)
+ESC      - Parar gravacao
+
+IMPORTANTE:
+
+- Os macros de pergaminho, montaria e item precisam ser
+  GRAVADOS UMA VEZ por cada pessoa (os slots do inventario
+  mudam dependendo da sua tela)
+- O Auto Chat ja vem pronto (Enter > Seta cima > Enter)
+- O app atualiza sozinho quando tiver versao nova
+
+Duvidas? Fala no Discord da guilda!
