@@ -91,7 +91,7 @@ namespace MacroOsHumildes
     {
         private const string GITHUB_USER = "Bruno-Martins-tech";
         private const string GITHUB_REPO = "macro-os-humildes";
-        private const string CURRENT_VERSION = "1.4.0";
+        private const string CURRENT_VERSION = "1.5.0";
         private static readonly string API_URL = $"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/releases/latest";
 
         public static async Task<(bool temUpdate, string versaoNova, string downloadUrl)?> ChecarAtualizacao()
@@ -185,8 +185,18 @@ namespace MacroOsHumildes
 
         public static void ReiniciarApp()
         {
-            Process.Start(new ProcessStartInfo(Application.ExecutablePath) { UseShellExecute = true });
-            Application.Exit();
+            string exe = Application.ExecutablePath;
+            // Iniciar novo processo como admin (o app exige elevacao)
+            var psi = new ProcessStartInfo
+            {
+                FileName = exe,
+                UseShellExecute = true,
+                Verb = "runas"
+            };
+            try { Process.Start(psi); } catch { }
+            // Dar tempo pro novo processo iniciar antes de fechar
+            Thread.Sleep(500);
+            Environment.Exit(0);
         }
 
         public static string VersaoAtual => CURRENT_VERSION;
