@@ -91,7 +91,7 @@ namespace MacroOsHumildes
     {
         private const string GITHUB_USER = "Bruno-Martins-tech";
         private const string GITHUB_REPO = "macro-os-humildes";
-        private const string CURRENT_VERSION = "1.5.0";
+        private const string CURRENT_VERSION = "1.6.0";
         private static readonly string API_URL = $"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/releases/latest";
 
         public static async Task<(bool temUpdate, string versaoNova, string downloadUrl)?> ChecarAtualizacao()
@@ -525,6 +525,7 @@ namespace MacroOsHumildes
         private ModernButton btnPararGravacao = null!;
         private ModernButton btnTestar = null!;
         private ModernButton btnPararReproducao = null!;
+        private Label lblEstadoGravacao = null!;
 
         // Abas
         private ModernButton btnTabMacros = null!;
@@ -1058,7 +1059,7 @@ namespace MacroOsHumildes
             var cardAcoes = new CardPanel
             {
                 Location = new Point(260, 248),
-                Size = new Size(344, 132),
+                Size = new Size(344, 210),
                 CardColor = BG_CARD
             };
             pnlMacros.Controls.Add(cardAcoes);
@@ -1076,7 +1077,7 @@ namespace MacroOsHumildes
 
             btnGravar = new ModernButton
             {
-                Text = "\u25CF  Gravar",
+                Text = "\u25CF  Gravar (F9)",
                 Location = new Point(16, 42),
                 Size = new Size(145, 34),
                 BaseColor = Color.FromArgb(180, 40, 40),
@@ -1122,11 +1123,64 @@ namespace MacroOsHumildes
             btnPararReproducao.Click += BtnPararReproducao_Click;
             cardAcoes.Controls.Add(btnPararReproducao);
 
+            // Label de estado da gravacao (feedback claro)
+            lblEstadoGravacao = new Label
+            {
+                Text = "",
+                Location = new Point(16, 126),
+                Size = new Size(310, 22),
+                ForeColor = ACCENT_GREEN,
+                Font = new Font("Segoe UI", 9, FontStyle.Bold),
+                BackColor = Color.Transparent,
+                TextAlign = ContentAlignment.MiddleLeft
+            };
+            cardAcoes.Controls.Add(lblEstadoGravacao);
+
+            // Botao Salvar + Limpar gravacao
+            var btnSalvarMacro = new ModernButton
+            {
+                Text = "\u2714  Salvar macro",
+                Location = new Point(16, 155),
+                Size = new Size(145, 34),
+                BaseColor = Color.FromArgb(30, 90, 150),
+                HoverColor = Color.FromArgb(40, 110, 180),
+                AccentColor = ACCENT_BLUE,
+                Radius = 8
+            };
+            btnSalvarMacro.Click += (s, e) =>
+            {
+                SalvarBiblioteca();
+                MostrarFeedbackGravacao("\u2714  Macro salvo com sucesso!", ACCENT_GREEN);
+            };
+            cardAcoes.Controls.Add(btnSalvarMacro);
+
+            var btnLimpar = new ModernButton
+            {
+                Text = "\u2716  Limpar gravacao",
+                Location = new Point(170, 155),
+                Size = new Size(155, 34),
+                BaseColor = Color.FromArgb(100, 40, 40),
+                HoverColor = Color.FromArgb(130, 50, 50),
+                Radius = 8
+            };
+            btnLimpar.Click += (s, e) =>
+            {
+                if (macroSelecionado == null) return;
+                if (macroSelecionado.Eventos.Count == 0) return;
+                if (MessageBox.Show($"Limpar a gravacao de \"{macroSelecionado.Name}\"?",
+                    "Confirmar", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+                macroSelecionado.Eventos.Clear();
+                SalvarBiblioteca();
+                CarregarCamposDoMacro();
+                MostrarFeedbackGravacao("Gravacao removida", ACCENT_YELLOW);
+            };
+            cardAcoes.Controls.Add(btnLimpar);
+
             // Card atalhos rapidos
             var cardAtalhos = new CardPanel
             {
-                Location = new Point(260, 390),
-                Size = new Size(344, 68),
+                Location = new Point(16, 390),
+                Size = new Size(588, 68),
                 CardColor = Color.FromArgb(24, 26, 34)
             };
             pnlMacros.Controls.Add(cardAtalhos);
@@ -1491,6 +1545,24 @@ namespace MacroOsHumildes
             SalvarBiblioteca();
         }
 
+        // Feedback claro no card de acoes (aparece e some apos 4s)
+        private void MostrarFeedbackGravacao(string msg, Color cor)
+        {
+            if (InvokeRequired) { BeginInvoke(() => MostrarFeedbackGravacao(msg, cor)); return; }
+            lblEstadoGravacao.Text = msg;
+            lblEstadoGravacao.ForeColor = cor;
+
+            // Timer pra sumir apos 4 segundos
+            var timer = new System.Windows.Forms.Timer { Interval = 4000 };
+            timer.Tick += (s, e) =>
+            {
+                lblEstadoGravacao.Text = "";
+                timer.Stop();
+                timer.Dispose();
+            };
+            timer.Start();
+        }
+
         private void AtualizarStatus(string msg, Color? cor = null)
         {
             if (InvokeRequired) { BeginInvoke(() => AtualizarStatus(msg, cor)); return; }
@@ -1645,11 +1717,15 @@ namespace MacroOsHumildes
                 CarregarCamposDoMacro();
             }
 
+            int totalAcoes = eventosGravados.Count;
             BeginInvoke(() =>
             {
                 btnGravar.Enabled = true;
                 btnPararGravacao.Enabled = false;
-                AtualizarStatus($"Gravacao finalizada  \u2022  {eventosGravados.Count} acoes", ACCENT_GREEN);
+                AtualizarStatus($"Gravacao finalizada  \u2022  {totalAcoes} acoes", ACCENT_GREEN);
+                MostrarFeedbackGravacao(
+                    $"\u2714  {totalAcoes} acoes gravadas e salvas em \"{macroSelecionado?.Name}\"",
+                    ACCENT_GREEN);
             });
         }
 
