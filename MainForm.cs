@@ -91,7 +91,7 @@ namespace MacroOsHumildes
     {
         private const string GITHUB_USER = "Bruno-Martins-tech";
         private const string GITHUB_REPO = "macro-os-humildes";
-        private const string CURRENT_VERSION = "1.2.0";
+        private const string CURRENT_VERSION = "1.3.0";
         private static readonly string API_URL = $"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/releases/latest";
 
         public static async Task<(bool temUpdate, string versaoNova, string downloadUrl)?> ChecarAtualizacao()
@@ -768,14 +768,16 @@ namespace MacroOsHumildes
             var pnlRodape = new Panel { Location = new Point(0, 650), Size = new Size(620, 70), BackColor = Color.FromArgb(16, 16, 22) };
             Controls.Add(pnlRodape);
 
+            // Botoes de acesso rapido
             var btnDiscord = new ModernButton
             {
-                Text = "Discord da guilda",
-                Location = new Point(16, 10),
-                Size = new Size(160, 32),
+                Text = "Discord",
+                Location = new Point(16, 8),
+                Size = new Size(90, 28),
                 BaseColor = ACCENT_BLUE,
                 HoverColor = Color.FromArgb(105, 118, 255),
-                Radius = 6
+                Radius = 6,
+                Font = new Font("Segoe UI", 8, FontStyle.Bold)
             };
             btnDiscord.Click += (s, e) =>
             {
@@ -787,23 +789,51 @@ namespace MacroOsHumildes
             };
             pnlRodape.Controls.Add(btnDiscord);
 
+            var btnDroplist = new ModernButton
+            {
+                Text = "Droplist",
+                Location = new Point(112, 8),
+                Size = new Size(90, 28),
+                BaseColor = Color.FromArgb(140, 90, 20),
+                HoverColor = Color.FromArgb(170, 110, 30),
+                Radius = 6,
+                Font = new Font("Segoe UI", 8, FontStyle.Bold)
+            };
+            btnDroplist.Click += (s, e) =>
+                Process.Start(new ProcessStartInfo("https://droplist.raidhut.com/") { UseShellExecute = true });
+            pnlRodape.Controls.Add(btnDroplist);
+
+            var btnUpdatesWyd = new ModernButton
+            {
+                Text = "Updates WYD",
+                Location = new Point(208, 8),
+                Size = new Size(110, 28),
+                BaseColor = Color.FromArgb(50, 100, 50),
+                HoverColor = Color.FromArgb(60, 125, 60),
+                Radius = 6,
+                Font = new Font("Segoe UI", 8, FontStyle.Bold)
+            };
+            btnUpdatesWyd.Click += (s, e) =>
+                Process.Start(new ProcessStartInfo("https://wydglobal.raidhut.com/pt-br/3578") { UseShellExecute = true });
+            pnlRodape.Controls.Add(btnUpdatesWyd);
+
             var lblCreditos = new Label
             {
-                Text = "Criado por MartinS- \u2022 Os Humildes",
-                Location = new Point(195, 10),
+                Text = "Criado por MartinS- \u2022 Os Humildes \u2022 Server 3",
+                Location = new Point(340, 8),
                 AutoSize = true,
                 ForeColor = TEXT_SECONDARY,
-                Font = new Font("Segoe UI", 8.5f)
+                Font = new Font("Segoe UI", 8)
             };
             pnlRodape.Controls.Add(lblCreditos);
 
             var lblAviso = new Label
             {
                 Text = "Use conforme as regras do seu servidor.",
-                Location = new Point(195, 28),
+                Location = new Point(340, 26),
                 AutoSize = true,
                 ForeColor = TEXT_DIM,
-                Font = new Font("Segoe UI", 7.5f)
+                Font = new Font("Segoe UI", 7)
             };
             pnlRodape.Controls.Add(lblAviso);
         }
