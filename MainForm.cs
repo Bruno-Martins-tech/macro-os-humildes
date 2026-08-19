@@ -91,7 +91,7 @@ namespace MacroOsHumildes
     {
         private const string GITHUB_USER = "Bruno-Martins-tech";
         private const string GITHUB_REPO = "macro-os-humildes";
-        private const string CURRENT_VERSION = "1.3.0";
+        private const string CURRENT_VERSION = "1.4.0";
         private static readonly string API_URL = $"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/releases/latest";
 
         public static async Task<(bool temUpdate, string versaoNova, string downloadUrl)?> ChecarAtualizacao()
@@ -691,11 +691,59 @@ namespace MacroOsHumildes
             btnTabTutorial.Click += (s, e) => MostrarAba("tutorial");
             pnlTabs.Controls.Add(btnTabTutorial);
 
+            // Botao forcar update
+            var btnUpdate = new ModernButton
+            {
+                Text = "\u2B06 Atualizar",
+                Location = new Point(400, 5),
+                Size = new Size(105, 32),
+                BaseColor = Color.FromArgb(45, 80, 45),
+                HoverColor = Color.FromArgb(55, 100, 55),
+                Radius = 6,
+                Font = new Font("Segoe UI", 8.5f, FontStyle.Bold)
+            };
+            btnUpdate.Click += async (s, e) =>
+            {
+                AtualizarStatus("Buscando atualizacao...", ACCENT_YELLOW);
+                var result = await AutoUpdater.ChecarAtualizacao();
+                if (result == null)
+                {
+                    AtualizarStatus("Nao foi possivel checar (sem internet?)", ACCENT_RED);
+                    return;
+                }
+                if (!result.Value.temUpdate)
+                {
+                    AtualizarStatus($"Voce ja esta na versao mais recente (v{AutoUpdater.VersaoAtual})", ACCENT_GREEN);
+                    return;
+                }
+                var (_, versaoNova, downloadUrl) = result.Value;
+                if (string.IsNullOrEmpty(downloadUrl)) return;
+
+                var resp = MessageBox.Show(
+                    $"Nova versao disponivel: v{versaoNova}\nVersao atual: v{AutoUpdater.VersaoAtual}\n\nAtualizar agora?",
+                    "Atualizacao", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
+                if (resp != DialogResult.Yes) return;
+
+                AtualizarStatus("Baixando atualizacao...", ACCENT_YELLOW);
+                bool ok = await AutoUpdater.BaixarEAtualizar(downloadUrl, pct =>
+                    AtualizarStatus($"Baixando... {pct}%", ACCENT_YELLOW));
+
+                if (ok)
+                {
+                    MessageBox.Show("Atualizacao concluida!\nO app vai reiniciar.",
+                        "Sucesso", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    AutoUpdater.ReiniciarApp();
+                }
+                else
+                    AtualizarStatus("Erro ao baixar atualizacao", ACCENT_RED);
+            };
+            pnlTabs.Controls.Add(btnUpdate);
+
             // Botao de som (musica do WYD)
             var btnSom = new ModernButton
             {
                 Text = "\u266B  Som",
-                Location = new Point(520, 5),
+                Location = new Point(512, 5),
                 Size = new Size(80, 32),
                 BaseColor = Color.FromArgb(50, 42, 62),
                 HoverColor = Color.FromArgb(65, 55, 80),

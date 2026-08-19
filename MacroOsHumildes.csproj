@@ -13,6 +13,7 @@
     <AssemblyName>MacroOsHumildes</AssemblyName>
     <RootNamespace>MacroOsHumildes</RootNamespace>
     <Nullable>enable</Nullable>
+    <ApplicationIcon>app.ico</ApplicationIcon>
   </PropertyGroup>
 
 </Project>
