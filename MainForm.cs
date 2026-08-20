@@ -73,10 +73,25 @@ namespace MacroOsHumildes
         }
     }
 
+    public class ConfiguracoesApp
+    {
+        [JsonPropertyName("hotkeyGravar")]
+        public string HotkeyGravar { get; set; } = "F9";
+
+        [JsonPropertyName("hotkeyPanico")]
+        public string HotkeyPanico { get; set; } = "Ctrl+F12";
+
+        [JsonPropertyName("velocidade")]
+        public double Velocidade { get; set; } = 1.0;
+    }
+
     public class Biblioteca
     {
         [JsonPropertyName("macros")]
         public List<Macro> Macros { get; set; } = new();
+
+        [JsonPropertyName("config")]
+        public ConfiguracoesApp Config { get; set; } = new();
     }
 
     // ======================================================================
@@ -91,7 +106,7 @@ namespace MacroOsHumildes
     {
         private const string GITHUB_USER = "Bruno-Martins-tech";
         private const string GITHUB_REPO = "macro-os-humildes";
-        private const string CURRENT_VERSION = "1.6.0";
+        private const string CURRENT_VERSION = "1.7.0";
         private static readonly string API_URL = $"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/releases/latest";
 
         public static async Task<(bool temUpdate, string versaoNova, string downloadUrl)?> ChecarAtualizacao()
@@ -510,7 +525,6 @@ namespace MacroOsHumildes
         private Dictionary<int, int> hotkeysRegistrados = new();
         private const int HOTKEY_PANICO_ID = 9999;
         private const int HOTKEY_GRAVAR_ID = 9998;
-        private const uint VK_F9 = 0x78;
 
         // Controles
         private ListBox lstMacros = null!;
@@ -527,11 +541,17 @@ namespace MacroOsHumildes
         private ModernButton btnPararReproducao = null!;
         private Label lblEstadoGravacao = null!;
 
+        // Velocidade
+        private TrackBar trkVelocidade = null!;
+        private Label lblVelocidadeValor = null!;
+
         // Abas
         private ModernButton btnTabMacros = null!;
         private ModernButton btnTabTutorial = null!;
+        private ModernButton btnTabConfig = null!;
         private Panel pnlMacros = null!;
         private Panel pnlTutorial = null!;
+        private Panel pnlConfig = null!;
 
         private bool carregandoCampos;
         private bool musicaTocando;
@@ -702,12 +722,24 @@ namespace MacroOsHumildes
             btnTabTutorial.Click += (s, e) => MostrarAba("tutorial");
             pnlTabs.Controls.Add(btnTabTutorial);
 
+            btnTabConfig = new ModernButton
+            {
+                Text = "\u2699 CONFIG",
+                Location = new Point(258, 5),
+                Size = new Size(110, 32),
+                BaseColor = Color.FromArgb(45, 47, 55),
+                HoverColor = Color.FromArgb(60, 62, 72),
+                Radius = 6
+            };
+            btnTabConfig.Click += (s, e) => MostrarAba("config");
+            pnlTabs.Controls.Add(btnTabConfig);
+
             // Botao forcar update
             var btnUpdate = new ModernButton
             {
-                Text = "\u2B06 Atualizar",
-                Location = new Point(400, 5),
-                Size = new Size(105, 32),
+                Text = "\u2B06 Update",
+                Location = new Point(412, 5),
+                Size = new Size(90, 32),
                 BaseColor = Color.FromArgb(45, 80, 45),
                 HoverColor = Color.FromArgb(55, 100, 55),
                 Radius = 6,
@@ -791,6 +823,11 @@ namespace MacroOsHumildes
             pnlTutorial = new Panel { Location = new Point(0, 142), Size = new Size(620, 468), BackColor = BG_DARK, Visible = false };
             Controls.Add(pnlTutorial);
             CriarPaginaTutorial();
+
+            // --- PAGINA CONFIG ---
+            pnlConfig = new Panel { Location = new Point(0, 142), Size = new Size(620, 468), BackColor = BG_DARK, Visible = false };
+            Controls.Add(pnlConfig);
+            CriarPaginaConfig();
 
             // --- STATUS BAR ---
             pnlStatusBar = new Panel { Location = new Point(0, 610), Size = new Size(620, 40), BackColor = Color.FromArgb(22, 24, 30) };
@@ -990,7 +1027,7 @@ namespace MacroOsHumildes
             var cardConfig = new CardPanel
             {
                 Location = new Point(260, 10),
-                Size = new Size(344, 228),
+                Size = new Size(344, 266),
                 CardColor = BG_CARD
             };
             pnlMacros.Controls.Add(cardConfig);
@@ -1043,6 +1080,39 @@ namespace MacroOsHumildes
             nudAtraso.ValueChanged += CampoAlterado;
             cardConfig.Controls.Add(nudAtraso);
 
+            y += gap;
+            AddLabel(cardConfig, "Velocidade", lx, y);
+            trkVelocidade = new TrackBar
+            {
+                Location = new Point(rx - 10, y - 6),
+                Size = new Size(120, 30),
+                Minimum = 1,
+                Maximum = 10,
+                Value = (int)(biblioteca.Config.Velocidade * 2),
+                TickFrequency = 1,
+                SmallChange = 1,
+                LargeChange = 1,
+                BackColor = BG_CARD
+            };
+            lblVelocidadeValor = new Label
+            {
+                Text = $"{biblioteca.Config.Velocidade:0.0}x",
+                Location = new Point(rx + 115, y),
+                AutoSize = true,
+                ForeColor = ACCENT_YELLOW,
+                Font = new Font("Segoe UI", 9, FontStyle.Bold),
+                BackColor = Color.Transparent
+            };
+            trkVelocidade.ValueChanged += (s, ev) =>
+            {
+                double vel = trkVelocidade.Value / 2.0;
+                biblioteca.Config.Velocidade = vel;
+                lblVelocidadeValor.Text = $"{vel:0.0}x";
+                SalvarBiblioteca();
+            };
+            cardConfig.Controls.Add(trkVelocidade);
+            cardConfig.Controls.Add(lblVelocidadeValor);
+
             y += gap + 4;
             lblAcoes = new Label
             {
@@ -1058,8 +1128,8 @@ namespace MacroOsHumildes
             // Card de acoes (gravar/testar)
             var cardAcoes = new CardPanel
             {
-                Location = new Point(260, 248),
-                Size = new Size(344, 210),
+                Location = new Point(260, 286),
+                Size = new Size(344, 172),
                 CardColor = BG_CARD
             };
             pnlMacros.Controls.Add(cardAcoes);
@@ -1077,7 +1147,7 @@ namespace MacroOsHumildes
 
             btnGravar = new ModernButton
             {
-                Text = "\u25CF  Gravar (F9)",
+                Text = $"\u25CF  Gravar ({biblioteca.Config.HotkeyGravar})",
                 Location = new Point(16, 42),
                 Size = new Size(145, 34),
                 BaseColor = Color.FromArgb(180, 40, 40),
@@ -1114,7 +1184,7 @@ namespace MacroOsHumildes
 
             btnPararReproducao = new ModernButton
             {
-                Text = "\u25A0  Parar (Ctrl+F12)",
+                Text = $"\u25A0  Parar ({biblioteca.Config.HotkeyPanico})",
                 Location = new Point(170, 84),
                 Size = new Size(155, 34),
                 Enabled = false,
@@ -1127,7 +1197,7 @@ namespace MacroOsHumildes
             lblEstadoGravacao = new Label
             {
                 Text = "",
-                Location = new Point(16, 126),
+                Location = new Point(16, 122),
                 Size = new Size(310, 22),
                 ForeColor = ACCENT_GREEN,
                 Font = new Font("Segoe UI", 9, FontStyle.Bold),
@@ -1139,9 +1209,9 @@ namespace MacroOsHumildes
             // Botao Salvar + Limpar gravacao
             var btnSalvarMacro = new ModernButton
             {
-                Text = "\u2714  Salvar macro",
-                Location = new Point(16, 155),
-                Size = new Size(145, 34),
+                Text = "\u2714  Salvar",
+                Location = new Point(16, 144),
+                Size = new Size(110, 28),
                 BaseColor = Color.FromArgb(30, 90, 150),
                 HoverColor = Color.FromArgb(40, 110, 180),
                 AccentColor = ACCENT_BLUE,
@@ -1156,9 +1226,9 @@ namespace MacroOsHumildes
 
             var btnLimpar = new ModernButton
             {
-                Text = "\u2716  Limpar gravacao",
-                Location = new Point(170, 155),
-                Size = new Size(155, 34),
+                Text = "\u2716  Limpar",
+                Location = new Point(134, 144),
+                Size = new Size(110, 28),
                 BaseColor = Color.FromArgb(100, 40, 40),
                 HoverColor = Color.FromArgb(130, 50, 50),
                 Radius = 8
@@ -1198,9 +1268,9 @@ namespace MacroOsHumildes
 
             var lblAtalhosInfo = new Label
             {
-                Text = "F5-F8  macro   F9  gravar   Ctrl+F12  parar tudo",
+                Text = $"F5-F8  macro   {biblioteca.Config.HotkeyGravar}  gravar   {biblioteca.Config.HotkeyPanico}  parar tudo",
                 Location = new Point(16, 32),
-                Size = new Size(310, 20),
+                Size = new Size(500, 20),
                 ForeColor = TEXT_SECONDARY,
                 Font = new Font("Consolas", 8.5f),
                 BackColor = Color.Transparent
@@ -1224,7 +1294,7 @@ namespace MacroOsHumildes
 
             y = AddTutorialStep(scroll, y, "1", "GRAVAR UM MACRO",
                 "1. Selecione um macro na lista (ex: \"Auto Pergaminho da Agua\")\n" +
-                "2. Pressione  F9  ou clique no botao  \u25CF Gravar\n" +
+                $"2. Pressione  {biblioteca.Config.HotkeyGravar}  ou clique no botao  \u25CF Gravar\n" +
                 "3. Espere a contagem regressiva de 3 segundos\n" +
                 "4. Faca as acoes no jogo (cliques, teclas)\n" +
                 "5. Pressione  ESC  para parar a gravacao",
@@ -1234,7 +1304,7 @@ namespace MacroOsHumildes
                 "1. Selecione o macro gravado\n" +
                 "2. Clique no botao  \u25B6 Testar\n" +
                 "3. O macro vai repetir suas acoes automaticamente\n" +
-                "4. Para parar:  Ctrl + F12  ou clique em Parar",
+                $"4. Para parar:  {biblioteca.Config.HotkeyPanico}  ou clique em Parar",
                 ACCENT_GREEN);
 
             y = AddTutorialStep(scroll, y, "3", "USAR COM O WYD",
@@ -1242,7 +1312,7 @@ namespace MacroOsHumildes
                 "2. Configure o atalho do macro (F5, F6, etc.)\n" +
                 "3. Va para o jogo e pressione o atalho (ex: F5)\n" +
                 "4. O macro roda em loop enquanto voce joga\n" +
-                "5.  Ctrl + F12  para tudo de qualquer tela",
+                $"5.  {biblioteca.Config.HotkeyPanico}  para tudo de qualquer tela",
                 ACCENT_BLUE);
 
             y = AddTutorialStep(scroll, y, "4", "AUTO CHAT (JA PRONTO)",
@@ -1317,6 +1387,189 @@ namespace MacroOsHumildes
             return y + cardHeight + 10;
         }
 
+        // --- PAGINA CONFIGURACOES ---
+        private ComboBox cmbConfigGravar = null!;
+        private ComboBox cmbConfigPanico = null!;
+
+        private void CriarPaginaConfig()
+        {
+            // Card — Atalhos globais
+            var cardAtalhos = new CardPanel
+            {
+                Location = new Point(16, 10),
+                Size = new Size(588, 200),
+                CardColor = BG_CARD
+            };
+            pnlConfig.Controls.Add(cardAtalhos);
+
+            var lblTitAtalhos = new Label
+            {
+                Text = "ATALHOS GLOBAIS",
+                Location = new Point(16, 14),
+                AutoSize = true,
+                ForeColor = TEXT_SECONDARY,
+                Font = new Font("Segoe UI", 8, FontStyle.Bold),
+                BackColor = Color.Transparent
+            };
+            cardAtalhos.Controls.Add(lblTitAtalhos);
+
+            var lblDescAtalhos = new Label
+            {
+                Text = "Personalize as teclas de atalho do app. As mudancas sao salvas automaticamente.",
+                Location = new Point(16, 36),
+                Size = new Size(550, 18),
+                ForeColor = TEXT_DIM,
+                Font = new Font("Segoe UI", 8),
+                BackColor = Color.Transparent
+            };
+            cardAtalhos.Controls.Add(lblDescAtalhos);
+
+            int lx = 16, rx = 260, y = 66, gap = 42;
+
+            // Hotkey gravar
+            AddLabel(cardAtalhos, "Gravar / Parar gravacao", lx, y);
+            cmbConfigGravar = new ComboBox
+            {
+                Location = new Point(rx, y - 3),
+                Size = new Size(140, 24),
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                BackColor = BG_INPUT,
+                ForeColor = TEXT_PRIMARY,
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Segoe UI", 9)
+            };
+            cmbConfigGravar.Items.AddRange(new object[] { "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12" });
+            cmbConfigGravar.SelectedItem = biblioteca.Config.HotkeyGravar;
+            cmbConfigGravar.SelectedIndexChanged += (s, ev) =>
+            {
+                biblioteca.Config.HotkeyGravar = cmbConfigGravar.SelectedItem?.ToString() ?? "F9";
+                SalvarBiblioteca();
+                RegistrarHotkeys();
+            };
+            cardAtalhos.Controls.Add(cmbConfigGravar);
+
+            y += gap;
+
+            // Hotkey panico
+            AddLabel(cardAtalhos, "Panico (parar tudo)", lx, y);
+            cmbConfigPanico = new ComboBox
+            {
+                Location = new Point(rx, y - 3),
+                Size = new Size(140, 24),
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                BackColor = BG_INPUT,
+                ForeColor = TEXT_PRIMARY,
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Segoe UI", 9)
+            };
+            cmbConfigPanico.Items.AddRange(new object[] {
+                "Ctrl+F1", "Ctrl+F2", "Ctrl+F3", "Ctrl+F4", "Ctrl+F5", "Ctrl+F6",
+                "Ctrl+F7", "Ctrl+F8", "Ctrl+F9", "Ctrl+F10", "Ctrl+F11", "Ctrl+F12"
+            });
+            cmbConfigPanico.SelectedItem = biblioteca.Config.HotkeyPanico;
+            cmbConfigPanico.SelectedIndexChanged += (s, ev) =>
+            {
+                biblioteca.Config.HotkeyPanico = cmbConfigPanico.SelectedItem?.ToString() ?? "Ctrl+F12";
+                SalvarBiblioteca();
+                RegistrarHotkeys();
+            };
+            cardAtalhos.Controls.Add(cmbConfigPanico);
+
+            y += gap;
+
+            // Nota
+            var lblNota = new Label
+            {
+                Text = "Os atalhos dos macros (F5, F6, etc.) sao configurados na aba Macros, no campo \"Atalho\" de cada macro.",
+                Location = new Point(16, y),
+                Size = new Size(550, 32),
+                ForeColor = TEXT_DIM,
+                Font = new Font("Segoe UI", 8.5f),
+                BackColor = Color.Transparent
+            };
+            cardAtalhos.Controls.Add(lblNota);
+
+            // Card — Velocidade
+            var cardVelocidade = new CardPanel
+            {
+                Location = new Point(16, 220),
+                Size = new Size(588, 140),
+                CardColor = BG_CARD
+            };
+            pnlConfig.Controls.Add(cardVelocidade);
+
+            var lblTitVel = new Label
+            {
+                Text = "VELOCIDADE DE REPRODUCAO",
+                Location = new Point(16, 14),
+                AutoSize = true,
+                ForeColor = TEXT_SECONDARY,
+                Font = new Font("Segoe UI", 8, FontStyle.Bold),
+                BackColor = Color.Transparent
+            };
+            cardVelocidade.Controls.Add(lblTitVel);
+
+            var lblDescVel = new Label
+            {
+                Text = "Multiplica a velocidade do replay. 1.0x = velocidade original. 5.0x = 5 vezes mais rapido.",
+                Location = new Point(16, 36),
+                Size = new Size(550, 18),
+                ForeColor = TEXT_DIM,
+                Font = new Font("Segoe UI", 8),
+                BackColor = Color.Transparent
+            };
+            cardVelocidade.Controls.Add(lblDescVel);
+
+            var trkVelConfig = new TrackBar
+            {
+                Location = new Point(16, 66),
+                Size = new Size(420, 30),
+                Minimum = 1,
+                Maximum = 10,
+                Value = (int)(biblioteca.Config.Velocidade * 2),
+                TickFrequency = 1,
+                SmallChange = 1,
+                LargeChange = 1,
+                BackColor = BG_CARD
+            };
+            var lblVelConfig = new Label
+            {
+                Text = $"{biblioteca.Config.Velocidade:0.0}x",
+                Location = new Point(445, 68),
+                AutoSize = true,
+                ForeColor = ACCENT_YELLOW,
+                Font = new Font("Segoe UI", 14, FontStyle.Bold),
+                BackColor = Color.Transparent
+            };
+            trkVelConfig.ValueChanged += (s, ev) =>
+            {
+                double vel = trkVelConfig.Value / 2.0;
+                biblioteca.Config.Velocidade = vel;
+                lblVelConfig.Text = $"{vel:0.0}x";
+                // Sincronizar com o slider da aba macros
+                if (trkVelocidade.Value != trkVelConfig.Value) trkVelocidade.Value = trkVelConfig.Value;
+                SalvarBiblioteca();
+            };
+            // Sincronizar slider da aba macros com este
+            trkVelocidade.ValueChanged += (s, ev) =>
+            {
+                if (trkVelConfig.Value != trkVelocidade.Value) trkVelConfig.Value = trkVelocidade.Value;
+            };
+            cardVelocidade.Controls.Add(trkVelConfig);
+            cardVelocidade.Controls.Add(lblVelConfig);
+
+            var lblVelLabels = new Label
+            {
+                Text = "0.5x                    1.0x                    2.0x                    3.0x                    4.0x                    5.0x",
+                Location = new Point(16, 100),
+                Size = new Size(450, 16),
+                ForeColor = TEXT_DIM,
+                Font = new Font("Segoe UI", 7),
+                BackColor = Color.Transparent
+            };
+            cardVelocidade.Controls.Add(lblVelLabels);
+        }
+
         // Desenho customizado da ListBox
         private void LstMacros_DrawItem(object? sender, DrawItemEventArgs e)
         {
@@ -1387,17 +1640,17 @@ namespace MacroOsHumildes
 
         private void MostrarAba(string aba)
         {
-            bool macros = aba == "macros";
-            pnlMacros.Visible = macros;
-            pnlTutorial.Visible = !macros;
+            pnlMacros.Visible = aba == "macros";
+            pnlTutorial.Visible = aba == "tutorial";
+            pnlConfig.Visible = aba == "config";
 
-            btnTabMacros.BaseColor = macros ? ACCENT_GREEN : Color.FromArgb(45, 47, 55);
-            btnTabMacros.ForeColor = macros ? Color.FromArgb(10, 10, 10) : TEXT_PRIMARY;
-            btnTabTutorial.BaseColor = !macros ? ACCENT_GREEN : Color.FromArgb(45, 47, 55);
-            btnTabTutorial.ForeColor = !macros ? Color.FromArgb(10, 10, 10) : TEXT_PRIMARY;
-
-            btnTabMacros.Invalidate();
-            btnTabTutorial.Invalidate();
+            foreach (var (btn, id) in new[] { (btnTabMacros, "macros"), (btnTabTutorial, "tutorial"), (btnTabConfig, "config") })
+            {
+                bool ativo = aba == id;
+                btn.BaseColor = ativo ? ACCENT_GREEN : Color.FromArgb(45, 47, 55);
+                btn.ForeColor = ativo ? Color.FromArgb(10, 10, 10) : TEXT_PRIMARY;
+                btn.Invalidate();
+            }
         }
 
         private static GraphicsPath RoundedRect(Rectangle bounds, int radius)
@@ -1847,6 +2100,9 @@ namespace MacroOsHumildes
                     string voltaStr = macro.Repeticoes == 0 ? $"Volta {voltaAtual} (infinito)" : $"Volta {voltaAtual}/{macro.Repeticoes}";
                     AtualizarStatus($"Rodando: {macro.Name}  \u2022  {voltaStr}", ACCENT_RED);
 
+                    double velocidade = biblioteca.Config.Velocidade;
+                    if (velocidade <= 0) velocidade = 1.0;
+
                     double tempoBase = 0;
                     for (int i = 0; i < macro.Eventos.Count && reproduzindo; i++)
                     {
@@ -1854,7 +2110,8 @@ namespace MacroOsHumildes
                         double espera = evt.T - tempoBase;
                         if (espera > 0)
                         {
-                            DormirCancelavel((int)(espera * 1000));
+                            int ms = (int)(espera * 1000 / velocidade);
+                            DormirCancelavel(ms);
                             if (!reproduzindo) return;
                         }
                         tempoBase = evt.T;
@@ -1952,10 +2209,17 @@ namespace MacroOsHumildes
             foreach (var id in hotkeysRegistrados.Keys) Win32.UnregisterHotKey(Handle, id);
             hotkeysRegistrados.Clear();
             Win32.UnregisterHotKey(Handle, HOTKEY_PANICO_ID);
+            Win32.UnregisterHotKey(Handle, HOTKEY_GRAVAR_ID);
 
-            // Ctrl+F12 = botao de panico (Alt+Esc nao funciona porque o Windows intercepta)
-            Win32.RegisterHotKey(Handle, HOTKEY_PANICO_ID, 0x0002 /*MOD_CONTROL*/ | Win32.MOD_NOREPEAT, 0x7B /*VK_F12*/);
-            Win32.RegisterHotKey(Handle, HOTKEY_GRAVAR_ID, Win32.MOD_NOREPEAT, VK_F9);
+            // Panico (ex: Ctrl+F12)
+            var (panicoMod, panicoVk) = ParseHotkeyCombo(biblioteca.Config.HotkeyPanico);
+            if (panicoVk != 0)
+                Win32.RegisterHotKey(Handle, HOTKEY_PANICO_ID, panicoMod | Win32.MOD_NOREPEAT, panicoVk);
+
+            // Gravar (ex: F9)
+            uint gravarVk = HotkeyParaVK(biblioteca.Config.HotkeyGravar);
+            if (gravarVk != 0)
+                Win32.RegisterHotKey(Handle, HOTKEY_GRAVAR_ID, Win32.MOD_NOREPEAT, gravarVk);
 
             for (int i = 0; i < biblioteca.Macros.Count; i++)
             {
@@ -1969,11 +2233,25 @@ namespace MacroOsHumildes
             }
         }
 
-        private uint HotkeyParaVK(string hotkey) => hotkey switch
+        private static uint HotkeyParaVK(string hotkey) => hotkey switch
         {
+            "F1" => 0x70, "F2" => 0x71, "F3" => 0x72, "F4" => 0x73,
             "F5" => 0x74, "F6" => 0x75, "F7" => 0x76, "F8" => 0x77,
             "F9" => 0x78, "F10" => 0x79, "F11" => 0x7A, "F12" => 0x7B, _ => 0
         };
+
+        private static (uint mod, uint vk) ParseHotkeyCombo(string combo)
+        {
+            // Suporta "Ctrl+F12", "F9", etc.
+            uint mod = 0;
+            string key = combo;
+            if (combo.StartsWith("Ctrl+", StringComparison.OrdinalIgnoreCase))
+            {
+                mod = 0x0002; // MOD_CONTROL
+                key = combo.Substring(5);
+            }
+            return (mod, HotkeyParaVK(key));
+        }
 
         protected override void WndProc(ref Message m)
         {
