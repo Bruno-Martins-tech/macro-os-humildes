@@ -126,7 +126,7 @@ namespace MacroSupremes
     {
         private const string GITHUB_USER = "Bruno-Martins-tech";
         private const string GITHUB_REPO = "macro-os-humildes";
-        private const string CURRENT_VERSION = "1.9.0";
+        private const string CURRENT_VERSION = "1.10.0";
         private static readonly string API_URL = $"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/releases/latest";
 
         public static async Task<(bool temUpdate, string versaoNova, string downloadUrl)?> ChecarAtualizacao()
@@ -188,7 +188,6 @@ namespace MacroSupremes
                 long totalBytes = response.Content.Headers.ContentLength ?? -1;
                 string exeAtual = Application.ExecutablePath;
                 string exeNovo = exeAtual + ".update";
-                string exeBackup = exeAtual + ".bak";
 
                 using (var stream = await response.Content.ReadAsStreamAsync())
                 using (var file = File.Create(exeNovo))
@@ -205,11 +204,7 @@ namespace MacroSupremes
                     }
                 }
 
-                // Renomear: atual → .bak, novo → atual
-                if (File.Exists(exeBackup)) File.Delete(exeBackup);
-                File.Move(exeAtual, exeBackup);
-                File.Move(exeNovo, exeAtual);
-
+                // Apenas baixa o .update; o swap e feito pelo script no ReiniciarApp
                 return true;
             }
             catch
@@ -221,9 +216,20 @@ namespace MacroSupremes
         public static void ReiniciarApp()
         {
             string exe = Environment.ProcessPath ?? Application.ExecutablePath;
+            string exeNovo = exe + ".update";
+            string exeBackup = exe + ".bak";
+            int pid = Environment.ProcessId;
 
-            // Usar PowerShell para esperar e reabrir com elevacao
-            string ps = $"Start-Sleep -Seconds 2; Start-Process '{exe}'";
+            // Script PowerShell: espera o processo morrer, swap arquivos, reabre com admin
+            string ps =
+                $"$p = Get-Process -Id {pid} -ErrorAction SilentlyContinue; " +
+                $"if ($p) {{ $p.WaitForExit(10000) }}; " +
+                $"Start-Sleep -Milliseconds 500; " +
+                $"if (Test-Path '{exeBackup}') {{ Remove-Item '{exeBackup}' -Force }}; " +
+                $"Rename-Item '{exe}' '{exeBackup}' -Force; " +
+                $"Rename-Item '{exeNovo}' '{exe}' -Force; " +
+                $"Start-Process '{exe}' -Verb RunAs";
+
             Process.Start(new ProcessStartInfo
             {
                 FileName = "powershell.exe",
@@ -802,6 +808,7 @@ namespace MacroSupremes
         private static readonly string LogDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MacroSupremes", "logs");
         private static readonly List<int> pingHistory = new();
+        private static readonly object pingLock = new();
         private static DateTime? sessaoInicio;
         private static int dcCount;
         private static int spikeCount;
@@ -828,15 +835,25 @@ namespace MacroSupremes
             string[] nomes = { "WYD", "WydGlobal", "wyd", "Wyd" };
             foreach (var n in nomes)
             {
-                try { if (Process.GetProcessesByName(n).Length > 0) return true; } catch { }
+                try
+                {
+                    var procs = Process.GetProcessesByName(n);
+                    bool found = procs.Length > 0;
+                    foreach (var p in procs) p.Dispose();
+                    if (found) return true;
+                }
+                catch { }
             }
             return false;
         }
 
         public static void RegistrarPing(int ms)
         {
-            if (ms > 0) pingHistory.Add(ms);
-            if (pingHistory.Count > 1000) pingHistory.RemoveAt(0);
+            lock (pingLock)
+            {
+                if (ms > 0) pingHistory.Add(ms);
+                if (pingHistory.Count > 1000) pingHistory.RemoveAt(0);
+            }
 
             // Detect spike (>500ms)
             if (ms > 500)
@@ -880,14 +897,20 @@ namespace MacroSupremes
 
         public static int PingMedio()
         {
-            if (pingHistory.Count == 0) return 0;
-            return (int)pingHistory.Average();
+            lock (pingLock)
+            {
+                if (pingHistory.Count == 0) return 0;
+                return (int)pingHistory.Average();
+            }
         }
 
         public static int PingMax()
         {
-            if (pingHistory.Count == 0) return 0;
-            return pingHistory.Max();
+            lock (pingLock)
+            {
+                if (pingHistory.Count == 0) return 0;
+                return pingHistory.Max();
+            }
         }
 
         public static string TempoOnlineStr()
@@ -1887,7 +1910,7 @@ namespace MacroSupremes
                 Size = new Size(120, 30),
                 Minimum = 1,
                 Maximum = 10,
-                Value = (int)(biblioteca.Config.Velocidade * 2),
+                Value = Math.Clamp((int)(biblioteca.Config.Velocidade * 2), 1, 10),
                 TickFrequency = 1,
                 SmallChange = 1,
                 LargeChange = 1,
@@ -1907,7 +1930,6 @@ namespace MacroSupremes
                 double vel = trkVelocidade.Value / 2.0;
                 biblioteca.Config.Velocidade = vel;
                 lblVelocidadeValor.Text = $"{vel:0.0}x";
-                SalvarBiblioteca();
             };
             cardConfig.Controls.Add(trkVelocidade);
             cardConfig.Controls.Add(lblVelocidadeValor);
@@ -2326,7 +2348,7 @@ namespace MacroSupremes
                 Size = new Size(420, 30),
                 Minimum = 1,
                 Maximum = 10,
-                Value = (int)(biblioteca.Config.Velocidade * 2),
+                Value = Math.Clamp((int)(biblioteca.Config.Velocidade * 2), 1, 10),
                 TickFrequency = 1,
                 SmallChange = 1,
                 LargeChange = 1,
@@ -2346,11 +2368,15 @@ namespace MacroSupremes
                 double vel = trkVelConfig.Value / 2.0;
                 biblioteca.Config.Velocidade = vel;
                 lblVelConfig.Text = $"{vel:0.0}x";
-                // Sincronizar com o slider da aba macros
-                if (trkVelocidade.Value != trkVelConfig.Value) trkVelocidade.Value = trkVelConfig.Value;
+                // Sincronizar com o slider da aba macros (sem loop: checa valor antes)
+                if (trkVelocidade.Value != trkVelConfig.Value)
+                {
+                    trkVelocidade.Value = trkVelConfig.Value;
+                    lblVelocidadeValor.Text = $"{vel:0.0}x";
+                }
                 SalvarBiblioteca();
             };
-            // Sincronizar slider da aba macros com este
+            // Sincronizar slider da aba macros com este (salva via trkVelConfig handler)
             trkVelocidade.ValueChanged += (s, ev) =>
             {
                 if (trkVelConfig.Value != trkVelocidade.Value) trkVelConfig.Value = trkVelocidade.Value;
@@ -3585,12 +3611,23 @@ namespace MacroSupremes
             if (gravarVk != 0)
                 Win32.RegisterHotKey(Handle, HOTKEY_GRAVAR_ID, Win32.MOD_NOREPEAT, gravarVk);
 
+            var hotkeyUsada = new HashSet<string>();
+            // Marcar hotkeys do sistema como usadas
+            hotkeyUsada.Add(biblioteca.Config.HotkeyGravar);
+            hotkeyUsada.Add(biblioteca.Config.HotkeyPanico);
+
             for (int i = 0; i < biblioteca.Macros.Count; i++)
             {
                 var macro = biblioteca.Macros[i];
                 if (string.IsNullOrEmpty(macro.Hotkey)) continue;
+                if (hotkeyUsada.Contains(macro.Hotkey))
+                {
+                    AtualizarStatus($"Atalho {macro.Hotkey} duplicado em \"{macro.Name}\" (ignorado)", ACCENT_YELLOW);
+                    continue;
+                }
                 uint vk = HotkeyParaVK(macro.Hotkey);
                 if (vk == 0) continue;
+                hotkeyUsada.Add(macro.Hotkey);
                 int id = 1000 + i;
                 if (Win32.RegisterHotKey(Handle, id, Win32.MOD_NOREPEAT, vk))
                     hotkeysRegistrados[id] = i;
@@ -3672,6 +3709,8 @@ namespace MacroSupremes
             Win32.UnregisterHotKey(Handle, HOTKEY_PANICO_ID);
             Win32.UnregisterHotKey(Handle, HOTKEY_GRAVAR_ID);
             pingTimer?.Stop(); pingTimer?.Dispose();
+            // Desativar proxy se ficou ligado, senao internet do usuario para
+            try { if (ProxyHack.IsAtivo()) ProxyHack.Desativar(); } catch { }
             AntiDC.FinalizarSessao();
             MciPlayer.Fechar();
             brasaoImg?.Dispose();

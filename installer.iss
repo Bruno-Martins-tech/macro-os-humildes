@@ -1,6 +1,6 @@
 [Setup]
 AppName=Macro Supremes
-AppVersion=1.9.0
+AppVersion=1.10.0
 AppPublisher=Supremes Guild
 AppPublisherURL=https://github.com/Bruno-Martins-tech/macro-os-humildes
 DefaultDirName={autopf}\MacroSupremes
@@ -25,7 +25,6 @@ Source: "bin\Release\net8.0-windows\win-x64\publish\MacroSupremes.exe"; DestDir:
 Source: "bin\Release\net8.0-windows\win-x64\publish\brasao.jpg"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{userdesktop}\Macro Supremes"; Filename: "{app}\MacroSupremes.exe"; IconFilename: "{app}\MacroSupremes.exe"; Comment: "Macro Supremes - WYD Global"
 Name: "{commondesktop}\Macro Supremes"; Filename: "{app}\MacroSupremes.exe"; IconFilename: "{app}\MacroSupremes.exe"; Comment: "Macro Supremes - WYD Global"
 Name: "{group}\Macro Supremes"; Filename: "{app}\MacroSupremes.exe"
 Name: "{group}\Desinstalar Macro Supremes"; Filename: "{uninstallexe}"
@@ -54,7 +53,5 @@ begin
   Result := '';
   NeedsRestart := False;
   KillProcess('MacroSupremes.exe');
-  KillProcess('cmd.exe');
-  KillProcess('powershell.exe');
   Sleep(1500);
 end;
