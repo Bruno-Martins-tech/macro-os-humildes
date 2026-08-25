@@ -1808,6 +1808,23 @@ namespace MacroSupremes
 
         private void CarregarBiblioteca()
         {
+            // Migrar dados da pasta antiga (MacroOsHumildes → MacroSupremes)
+            if (!File.Exists(MacrosPath))
+            {
+                string pastaAntiga = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MacroOsHumildes");
+                string arquivoAntigo = Path.Combine(pastaAntiga, "macros.json");
+                if (File.Exists(arquivoAntigo))
+                {
+                    try
+                    {
+                        Directory.CreateDirectory(AppDataDir);
+                        File.Copy(arquivoAntigo, MacrosPath);
+                    }
+                    catch { }
+                }
+            }
+
             if (File.Exists(MacrosPath))
             {
                 try
