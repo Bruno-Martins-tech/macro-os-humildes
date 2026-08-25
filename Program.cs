@@ -1,7 +1,7 @@
 using System;
 using System.Windows.Forms;
 
-namespace MacroOsHumildes
+namespace MacroSupremes
 {
     static class Program
     {

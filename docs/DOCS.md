@@ -1,4 +1,4 @@
-# Macro Os Humildes - Documentacao Completa
+# Macro Supremes - Documentacao Completa
 
 ## Visao Geral
 
@@ -6,7 +6,7 @@ App de desktop Windows que grava e repete sequencias de mouse e teclado para aut
 
 **Autor do projeto:** Bruno
 **Creditos no app:** MartinS-
-**Guilda:** Os Humildes
+**Guilda:** Supremes
 **Plataforma:** Windows 10/11
 
 ---
@@ -19,23 +19,24 @@ App de desktop Windows que grava e repete sequencias de mouse e teclado para aut
 - **Dependencias externas:** Nenhuma (Win32 via P/Invoke)
 - **Musica:** MCI Player (winmm.dll) tocando `login.mp3` direto da pasta do WYD
 - **Auto-update:** GitHub Releases API (checagem automatica ao abrir + botao manual)
-- **Persistencia:** JSON em `%APPDATA%\MacroOsHumildes\macros.json`
+- **Persistencia:** JSON em `%APPDATA%\MacroSupremes\macros.json`
 
 ---
 
 ## Estrutura do Projeto
 
 ```
-MacroOsHumildes/
+MacroSupremes/
   MacroOsHumildes.csproj   # Config do projeto .NET 8
   app.manifest              # Manifesto UAC (requireAdministrator)
-  app.ico                   # Icone bandeira do Brasil (16/32/48/256px)
+  app.ico                   # Icone brasao da guild (16/32/48/64/128/256px)
+  brasao.jpg                # Brasao da guild Supremes (header do app)
   Program.cs                # Entry point
   MainForm.cs               # Toda a logica (UI, hooks, gravacao, reproducao, hotkeys, updater)
   README.md                 # Instrucoes de build e uso
   docs/DOCS.md              # Esta documentacao
   dist/                     # Pasta de distribuicao
-    MacroOsHumildes.exe
+    MacroSupremes.exe
     LEIA-ME.txt
 ```
 
@@ -51,7 +52,7 @@ Macro { Name, Hotkey, Repeticoes, IntervaloMs, AtrasoInicialMs, Eventos[] }
 Biblioteca { Macros[] }
 ```
 
-Persistido em `%APPDATA%\MacroOsHumildes\macros.json` (System.Text.Json, indentado).
+Persistido em `%APPDATA%\MacroSupremes\macros.json` (System.Text.Json, indentado).
 
 ### Gravacao (Win32 low-level hooks)
 
@@ -83,10 +84,18 @@ Persistido em `%APPDATA%\MacroOsHumildes\macros.json` (System.Text.Json, indenta
 ### Auto-Updater
 
 - Checa `https://api.github.com/repos/Bruno-Martins-tech/macro-os-humildes/releases/latest`
-- Compara `tag_name` (ex: "v1.6.0") com `CURRENT_VERSION` no codigo
-- Se versao nova: popup → baixa `.exe` → renomeia atual pra `.bak` → substitui → reinicia com `Verb = "runas"`
+- Compara `tag_name` (ex: "v1.8.0") com `CURRENT_VERSION` no codigo
+- Se versao nova: popup → baixa `.exe` → renomeia atual pra `.bak` → substitui → reinicia
 - Timeout de 8s na checagem (nao trava o app se nao tiver internet)
 - Botao "Atualizar" na barra de abas pra forcar checagem manual
+
+### Hack Login Server Full
+
+- Botao toggle na aba Config
+- Ativa proxy `0.0.0.4:80` via Registry (`HKCU\Internet Settings`)
+- Notifica o sistema via `InternetSetOption` (wininet.dll)
+- Permite logar quando o servidor esta lotado
+- Deve ser desativado apos logar
 
 ---
 
@@ -115,14 +124,14 @@ Persistido em `%APPDATA%\MacroOsHumildes\macros.json` (System.Text.Json, indenta
 ## UI / Design
 
 - **Tema:** Dark mode com tons azul-roxo escuro (atmosfera WYD)
-- **Header:** Gradiente + bandeira do Brasil (GDI+) + runas nordicas decorativas + titulo dourado "With Your Destiny"
+- **Header:** Gradiente + brasao da guild Supremes + runas nordicas decorativas + titulo dourado "With Your Destiny"
 - **Layout:** Cards com cantos arredondados (CardPanel custom)
 - **Botoes:** ModernButton com hover effect e borda de acento
-- **Abas:** MACROS / COMO USAR (tutorial integrado com 5 passos)
+- **Abas:** MACROS / COMO USAR (tutorial integrado com 5 passos) / CONFIG
 - **Status bar:** Bolinha colorida (verde=pronto, amarelo=aguardando, vermelho=rodando)
 - **Rodape:** Botoes Discord, Droplist, Updates WYD + creditos
 - **Musica:** login.mp3 do WYD em loop (volume baixo, botao mute)
-- **Icone:** Bandeira do Brasil multi-resolucao (16/32/48/256px)
+- **Icone:** Brasao da guild multi-resolucao (16/32/48/64/128/256px)
 
 ---
 
@@ -138,7 +147,7 @@ Persistido em `%APPDATA%\MacroOsHumildes\macros.json` (System.Text.Json, indenta
 C:\Users\bnobm\.dotnet\dotnet.exe publish MacroOsHumildes.csproj -c Release
 ```
 
-Saida: `bin\Release\net8.0-windows\win-x64\publish\MacroOsHumildes.exe` (~69MB, self-contained)
+Saida: `bin\Release\net8.0-windows\win-x64\publish\MacroSupremes.exe` (~69MB, self-contained)
 
 Para publicar em pasta especifica:
 ```bash
@@ -149,17 +158,17 @@ C:\Users\bnobm\.dotnet\dotnet.exe publish MacroOsHumildes.csproj -c Release -o p
 
 ## Como Publicar uma Atualizacao
 
-1. Alterar `CURRENT_VERSION` em `MainForm.cs` (ex: `"1.7.0"`)
-2. Compilar: `dotnet publish -c Release -o publish_v170`
+1. Alterar `CURRENT_VERSION` em `MainForm.cs` (ex: `"1.8.0"`)
+2. Compilar: `dotnet publish -c Release -o publish_v180`
 3. Commit + push:
    ```
    git add MainForm.cs
-   git commit -m "feat: v1.7.0 - descricao"
+   git commit -m "feat: v1.8.0 - descricao"
    git push origin master
    ```
 4. Criar release no GitHub:
    ```
-   gh release create v1.7.0 publish_v170/MacroOsHumildes.exe --title "v1.7.0 - Titulo" --notes "Descricao"
+   gh release create v1.8.0 publish_v180/MacroSupremes.exe --title "v1.8.0 - Titulo" --notes "Descricao"
    ```
 5. Todos os usuarios recebem aviso de atualizacao ao abrir o app
 
@@ -172,8 +181,7 @@ C:\Users\bnobm\.dotnet\dotnet.exe publish MacroOsHumildes.csproj -c Release -o p
 ### Para novos usuarios
 
 1. Gerar o zip: copiar `.exe` + `LEIA-ME.txt` para pasta `dist/`, zipar
-2. O zip fica em `C:\Users\bnobm\OneDrive\Desktop\Macro-Os-Humildes.zip`
-3. Mandar no Discord/WhatsApp da guilda
+2. Mandar no Discord/WhatsApp da guilda
 
 ### Para usuarios existentes
 
@@ -191,6 +199,8 @@ O app atualiza sozinho via GitHub Releases. Nao precisa mandar zip de novo.
 | 1.4.0 | Icone bandeira BR, botao forcar update |
 | 1.5.0 | Fix restart apos update (UAC), icone multi-resolucao correto |
 | 1.6.0 | Feedback de gravacao, botao salvar macro, botao limpar gravacao |
+| 1.7.0 | Aba Config com atalhos personalizaveis e velocidade |
+| 1.8.0 | Rebrand Supremes, brasao da guild, hack login server full, fix restart |
 
 ---
 
@@ -211,4 +221,4 @@ O app atualiza sozinho via GitHub Releases. Nao precisa mandar zip de novo.
 
 ---
 
-Criado por **MartinS-** para a guilda **Os Humildes** — WYD Global Server 3.
+Criado por **MartinS-** para a guilda **Supremes** — WYD Global Server 3.

@@ -1,4 +1,4 @@
-# MACRO OS HUMILDES
+# MACRO SUPREMES
 
 App de automacao de mouse e teclado para WYD. Grava e repete sequencias de cliques e teclas.
 Com musica nostalgica do WYD e auto-update via GitHub.
@@ -11,7 +11,7 @@ O .NET 8 SDK ja esta instalado em `C:\Users\bnobm\.dotnet\`.
 C:\Users\bnobm\.dotnet\dotnet.exe publish -c Release
 ```
 
-O executavel fica em: `bin\Release\net8.0-windows\win-x64\publish\MacroOsHumildes.exe`
+O executavel fica em: `bin\Release\net8.0-windows\win-x64\publish\MacroSupremes.exe`
 
 ## Para quem recebe o .exe
 
@@ -38,11 +38,11 @@ O executavel fica em: `bin\Release\net8.0-windows\win-x64\publish\MacroOsHumilde
 
 ## Como publicar uma atualizacao
 
-1. Altere a versao em `MainForm.cs` na constante `CURRENT_VERSION` (ex: "1.2.0")
+1. Altere a versao em `MainForm.cs` na constante `CURRENT_VERSION` (ex: "1.8.0")
 2. Compile: `dotnet publish -c Release`
 3. Va no GitHub → Releases → "Create a new release"
-4. Tag: `v1.2.0` (mesmo numero da constante, com "v" na frente)
-5. Anexe o `MacroOsHumildes.exe` da pasta publish
+4. Tag: `v1.8.0` (mesmo numero da constante, com "v" na frente)
+5. Anexe o `MacroSupremes.exe` da pasta publish
 6. Publique
 
 Todos os usuarios que abrirem o app vao receber o aviso de atualizacao automaticamente.

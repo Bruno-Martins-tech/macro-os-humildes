@@ -14,7 +14,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using Microsoft.Win32;
 
-namespace MacroOsHumildes
+namespace MacroSupremes
 {
     // ======================================================================
     // MODELO DE DADOS
@@ -115,7 +115,7 @@ namespace MacroOsHumildes
             try
             {
                 using var http = new HttpClient();
-                http.DefaultRequestHeaders.Add("User-Agent", "MacroOsHumildes-Updater");
+                http.DefaultRequestHeaders.Add("User-Agent", "MacroSupremes-Updater");
                 http.Timeout = TimeSpan.FromSeconds(8);
 
                 var json = await http.GetStringAsync(API_URL);
@@ -161,7 +161,7 @@ namespace MacroOsHumildes
             try
             {
                 using var http = new HttpClient();
-                http.DefaultRequestHeaders.Add("User-Agent", "MacroOsHumildes-Updater");
+                http.DefaultRequestHeaders.Add("User-Agent", "MacroSupremes-Updater");
 
                 using var response = await http.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead);
                 response.EnsureSuccessStatusCode();
@@ -563,7 +563,7 @@ namespace MacroOsHumildes
         private static readonly Color TEXT_DIM = Color.FromArgb(90, 90, 100);
 
         private static readonly string AppDataDir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MacroOsHumildes");
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MacroSupremes");
         private static readonly string MacrosPath = Path.Combine(AppDataDir, "macros.json");
 
         // Dados

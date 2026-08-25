@@ -10,8 +10,8 @@
     <SelfContained>true</SelfContained>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
-    <AssemblyName>MacroOsHumildes</AssemblyName>
-    <RootNamespace>MacroOsHumildes</RootNamespace>
+    <AssemblyName>MacroSupremes</AssemblyName>
+    <RootNamespace>MacroSupremes</RootNamespace>
     <Nullable>enable</Nullable>
     <ApplicationIcon>app.ico</ApplicationIcon>
   </PropertyGroup>
