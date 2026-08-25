@@ -107,7 +107,7 @@ namespace MacroSupremes
     {
         private const string GITHUB_USER = "Bruno-Martins-tech";
         private const string GITHUB_REPO = "macro-os-humildes";
-        private const string CURRENT_VERSION = "1.7.0";
+        private const string CURRENT_VERSION = "1.8.0";
         private static readonly string API_URL = $"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/releases/latest";
 
         public static async Task<(bool temUpdate, string versaoNova, string downloadUrl)?> ChecarAtualizacao()
@@ -201,35 +201,25 @@ namespace MacroSupremes
 
         public static void ReiniciarApp()
         {
-            // Preferir ProcessPath (mais confiavel em single-file .NET 8)
             string exe = Environment.ProcessPath ?? Application.ExecutablePath;
-            var psi = new ProcessStartInfo
+            string bat = Path.Combine(Path.GetTempPath(), "macro_restart.cmd");
+
+            // Bat que espera o app fechar e reabre (herda elevacao do processo pai)
+            File.WriteAllText(bat,
+                "@echo off\r\n" +
+                "timeout /t 2 /nobreak >nul\r\n" +
+                $"start \"\" \"{exe}\"\r\n" +
+                "del \"%~f0\"\r\n");
+
+            Process.Start(new ProcessStartInfo
             {
-                FileName = exe,
-                UseShellExecute = true
-                // Nao usar Verb = "runas" — o app.manifest ja pede elevacao
-            };
-            try
-            {
-                var proc = Process.Start(psi);
-                if (proc != null)
-                {
-                    Thread.Sleep(1000);
-                    Environment.Exit(0);
-                }
-                else
-                {
-                    MessageBox.Show(
-                        "Nao foi possivel reiniciar.\nFeche e abra o app manualmente.",
-                        "Aviso", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show(
-                    $"Erro ao reiniciar: {ex.Message}\nFeche e abra o app manualmente.",
-                    "Erro", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
+                FileName = "cmd.exe",
+                Arguments = $"/c \"{bat}\"",
+                WindowStyle = ProcessWindowStyle.Hidden,
+                CreateNoWindow = true
+            });
+
+            Environment.Exit(0);
         }
 
         public static string VersaoAtual => CURRENT_VERSION;
