@@ -1,6 +1,6 @@
 [Setup]
 AppName=Macro Supremes
-AppVersion=1.8.0
+AppVersion=1.9.0
 AppPublisher=Supremes Guild
 AppPublisherURL=https://github.com/Bruno-Martins-tech/macro-os-humildes
 DefaultDirName={autopf}\MacroSupremes

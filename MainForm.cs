@@ -126,7 +126,7 @@ namespace MacroSupremes
     {
         private const string GITHUB_USER = "Bruno-Martins-tech";
         private const string GITHUB_REPO = "macro-os-humildes";
-        private const string CURRENT_VERSION = "1.8.0";
+        private const string CURRENT_VERSION = "1.9.0";
         private static readonly string API_URL = $"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/releases/latest";
 
         public static async Task<(bool temUpdate, string versaoNova, string downloadUrl)?> ChecarAtualizacao()
