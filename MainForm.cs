@@ -96,6 +96,24 @@ namespace MacroSupremes
         public ConfiguracoesApp Config { get; set; } = new();
     }
 
+    public class DcLogEntry
+    {
+        [JsonPropertyName("timestamp")]
+        public string Timestamp { get; set; } = "";
+        [JsonPropertyName("tipo")]
+        public string Tipo { get; set; } = ""; // "dc", "spike", "sessao_inicio", "sessao_fim"
+        [JsonPropertyName("pingMs")]
+        public int PingMs { get; set; }
+        [JsonPropertyName("pingMedio")]
+        public int PingMedio { get; set; }
+        [JsonPropertyName("tempoOnline")]
+        public string TempoOnline { get; set; } = "";
+        [JsonPropertyName("otimizacoesAtivas")]
+        public int OtimizacoesAtivas { get; set; }
+        [JsonPropertyName("detalhes")]
+        public string Detalhes { get; set; } = "";
+    }
+
     // ======================================================================
     // WIN32 P/INVOKE
     // ======================================================================
@@ -782,6 +800,239 @@ namespace MacroSupremes
             }
             catch { return -1; }
         }
+
+        // ======================================================================
+        // DC MONITOR — Log de desconexoes, spikes e sessoes
+        // ======================================================================
+
+        private static readonly string LogDir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MacroSupremes", "logs");
+        private static readonly List<int> pingHistory = new();
+        private static DateTime? sessaoInicio;
+        private static int dcCount;
+        private static int spikeCount;
+        private static bool wydRodando;
+
+        public static void IniciarSessao()
+        {
+            sessaoInicio = DateTime.Now;
+            dcCount = 0;
+            spikeCount = 0;
+            pingHistory.Clear();
+            wydRodando = IsWydRunning();
+            SalvarLog(new DcLogEntry
+            {
+                Timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+                Tipo = "sessao_inicio",
+                OtimizacoesAtivas = ContarOtimizacoesAtivas(),
+                Detalhes = wydRodando ? "WYD detectado" : "WYD nao encontrado"
+            });
+        }
+
+        public static bool IsWydRunning()
+        {
+            string[] nomes = { "WYD", "WydGlobal", "wyd", "Wyd" };
+            foreach (var n in nomes)
+            {
+                try { if (Process.GetProcessesByName(n).Length > 0) return true; } catch { }
+            }
+            return false;
+        }
+
+        public static void RegistrarPing(int ms)
+        {
+            if (ms > 0) pingHistory.Add(ms);
+            if (pingHistory.Count > 1000) pingHistory.RemoveAt(0);
+
+            // Detect spike (>500ms)
+            if (ms > 500)
+            {
+                spikeCount++;
+                SalvarLog(new DcLogEntry
+                {
+                    Timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+                    Tipo = "spike",
+                    PingMs = ms,
+                    PingMedio = PingMedio(),
+                    TempoOnline = TempoOnlineStr(),
+                    OtimizacoesAtivas = ContarOtimizacoesAtivas(),
+                    Detalhes = $"Latencia alta: {ms}ms"
+                });
+            }
+
+            // Check if WYD process disappeared (DC detection)
+            bool wydAgora = IsWydRunning();
+            if (wydRodando && !wydAgora)
+            {
+                dcCount++;
+                int ultimoPing = pingHistory.Count > 0 ? pingHistory[^1] : -1;
+                string causa = ultimoPing > 300 ? "Ping alto antes da queda (possivel problema de rede)"
+                    : ultimoPing > 0 ? "Ping estava normal (possivel bug do servidor/jogo)"
+                    : "Sem dados de ping";
+
+                SalvarLog(new DcLogEntry
+                {
+                    Timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+                    Tipo = "dc",
+                    PingMs = ultimoPing,
+                    PingMedio = PingMedio(),
+                    TempoOnline = TempoOnlineStr(),
+                    OtimizacoesAtivas = ContarOtimizacoesAtivas(),
+                    Detalhes = causa
+                });
+            }
+            wydRodando = wydAgora;
+        }
+
+        public static int PingMedio()
+        {
+            if (pingHistory.Count == 0) return 0;
+            return (int)pingHistory.Average();
+        }
+
+        public static int PingMax()
+        {
+            if (pingHistory.Count == 0) return 0;
+            return pingHistory.Max();
+        }
+
+        public static string TempoOnlineStr()
+        {
+            if (sessaoInicio == null) return "00:00:00";
+            var elapsed = DateTime.Now - sessaoInicio.Value;
+            return $"{(int)elapsed.TotalHours:D2}:{elapsed.Minutes:D2}:{elapsed.Seconds:D2}";
+        }
+
+        public static int DcCount => dcCount;
+        public static int SpikeCount => spikeCount;
+
+        public static int ContarOtimizacoesAtivas()
+        {
+            int count = 0;
+            try { if (IsTcpNoDelayAtivo()) count++; } catch { }
+            try { if (IsTcpAckFrequencyAtivo()) count++; } catch { }
+            try { if (IsKeepAliveAtivo()) count++; } catch { }
+            try { if (IsIPv6DesativadoAtivo()) count++; } catch { }
+            try { if (IsNicPowerMgmtAtivo()) count++; } catch { }
+            try { if (IsWifiPowerSaveAtivo()) count++; } catch { }
+            try { if (IsFirewallWhitelistAtivo()) count++; } catch { }
+            try { if (IsHighPriorityAtivo()) count++; } catch { }
+            try { if (IsCpuAffinityAtivo()) count++; } catch { }
+            try { if (IsHighPerfPlanAtivo()) count++; } catch { }
+            return count;
+        }
+
+        private static void SalvarLog(DcLogEntry entry)
+        {
+            try
+            {
+                Directory.CreateDirectory(LogDir);
+                string arquivo = Path.Combine(LogDir, $"dc-log-{DateTime.Now:yyyy-MM-dd}.json");
+                var logs = new List<DcLogEntry>();
+                if (File.Exists(arquivo))
+                {
+                    string json = File.ReadAllText(arquivo);
+                    logs = JsonSerializer.Deserialize<List<DcLogEntry>>(json) ?? new List<DcLogEntry>();
+                }
+                logs.Add(entry);
+                File.WriteAllText(arquivo, JsonSerializer.Serialize(logs, new JsonSerializerOptions { WriteIndented = true }));
+            }
+            catch { }
+        }
+
+        public static void FinalizarSessao()
+        {
+            SalvarLog(new DcLogEntry
+            {
+                Timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+                Tipo = "sessao_fim",
+                PingMedio = PingMedio(),
+                TempoOnline = TempoOnlineStr(),
+                OtimizacoesAtivas = ContarOtimizacoesAtivas(),
+                Detalhes = $"DCs: {dcCount}, Spikes: {spikeCount}, Ping max: {PingMax()}ms"
+            });
+        }
+
+        public static string GerarRelatorio()
+        {
+            string hoje = DateTime.Now.ToString("yyyy-MM-dd");
+            string arquivo = Path.Combine(LogDir, $"dc-log-{hoje}.json");
+
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("========================================");
+            sb.AppendLine("  RELATORIO ANTI-DC - MACRO SUPREMES");
+            sb.AppendLine($"  Data: {hoje}");
+            sb.AppendLine("========================================");
+            sb.AppendLine();
+
+            // Current session stats
+            sb.AppendLine("--- SESSAO ATUAL ---");
+            sb.AppendLine($"Tempo online: {TempoOnlineStr()}");
+            sb.AppendLine($"Ping medio: {PingMedio()}ms");
+            sb.AppendLine($"Ping maximo: {PingMax()}ms");
+            sb.AppendLine($"Desconexoes (DCs): {dcCount}");
+            sb.AppendLine($"Picos de latencia (>500ms): {spikeCount}");
+            sb.AppendLine($"Otimizacoes ativas: {ContarOtimizacoesAtivas()}");
+            sb.AppendLine();
+
+            // Load today's log
+            if (File.Exists(arquivo))
+            {
+                try
+                {
+                    string json = File.ReadAllText(arquivo);
+                    var logs = JsonSerializer.Deserialize<List<DcLogEntry>>(json) ?? new List<DcLogEntry>();
+
+                    int totalDCs = logs.Count(l => l.Tipo == "dc");
+                    int totalSpikes = logs.Count(l => l.Tipo == "spike");
+                    int sessoes = logs.Count(l => l.Tipo == "sessao_inicio");
+
+                    sb.AppendLine("--- HISTORICO DO DIA ---");
+                    sb.AppendLine($"Sessoes abertas: {sessoes}");
+                    sb.AppendLine($"Total de DCs: {totalDCs}");
+                    sb.AppendLine($"Total de spikes: {totalSpikes}");
+                    sb.AppendLine();
+
+                    // List DCs with details
+                    var dcs = logs.Where(l => l.Tipo == "dc").ToList();
+                    if (dcs.Count > 0)
+                    {
+                        sb.AppendLine("--- DETALHES DOS DCs ---");
+                        foreach (var dc in dcs)
+                        {
+                            sb.AppendLine($"[{dc.Timestamp}] Ping: {dc.PingMs}ms | Media: {dc.PingMedio}ms | Online: {dc.TempoOnline} | Anti-DC: {dc.OtimizacoesAtivas} otim.");
+                            sb.AppendLine($"  Causa provavel: {dc.Detalhes}");
+                        }
+                        sb.AppendLine();
+                    }
+
+                    // List spikes
+                    var spikes = logs.Where(l => l.Tipo == "spike").TakeLast(10).ToList();
+                    if (spikes.Count > 0)
+                    {
+                        sb.AppendLine("--- ULTIMOS PICOS DE LATENCIA ---");
+                        foreach (var spike in spikes)
+                        {
+                            sb.AppendLine($"[{spike.Timestamp}] {spike.PingMs}ms (media era {spike.PingMedio}ms)");
+                        }
+                    }
+                }
+                catch { sb.AppendLine("Erro ao ler log do dia."); }
+            }
+            else
+            {
+                sb.AppendLine("Nenhum log encontrado para hoje.");
+            }
+
+            sb.AppendLine();
+            sb.AppendLine("========================================");
+            sb.AppendLine("Copie este relatorio e envie ao suporte.");
+            sb.AppendLine("========================================");
+
+            return sb.ToString();
+        }
+
+        public static string CaminhoLogDir => LogDir;
     }
 
     static class Win32
@@ -1079,6 +1330,10 @@ namespace MacroSupremes
         private Label lblPingValue = null!;
         private Label lblOptCount = null!;
         private System.Windows.Forms.Timer pingTimer = null!;
+        private Label lblTempoOnline = null!;
+        private Label lblDcCount = null!;
+        private Label lblSpikeCount = null!;
+        private Label lblPingMedio = null!;
 
         private bool carregandoCampos;
         private bool musicaTocando;
@@ -1118,6 +1373,7 @@ namespace MacroSupremes
             MostrarAba("macros");
             IniciarMusica();
             ChecarAtualizacaoAsync();
+            AntiDC.IniciarSessao();
         }
 
         private async void ChecarAtualizacaoAsync()
@@ -2401,17 +2657,181 @@ namespace MacroSupremes
                 AtualizarStatus("Todas as otimizacoes revertidas.", TEXT_DIM);
             };
 
+            // --- Card MONITORAMENTO ---
+            currentY += 10;
+            var lblMonit = new Label
+            {
+                Text = "MONITORAMENTO",
+                Location = new Point(0, currentY),
+                AutoSize = true,
+                ForeColor = TEXT_SECONDARY,
+                Font = new Font("Segoe UI", 8, FontStyle.Bold)
+            };
+            pnlScroll.Controls.Add(lblMonit);
+            currentY += 22;
+
+            var cardMonit = new CardPanel
+            {
+                Location = new Point(0, currentY),
+                Size = new Size(560, 140),
+                CardColor = BG_CARD
+            };
+            pnlScroll.Controls.Add(cardMonit);
+
+            lblTempoOnline = new Label
+            {
+                Text = "Tempo online: 00:00:00",
+                Location = new Point(16, 12),
+                AutoSize = true,
+                ForeColor = TEXT_PRIMARY,
+                Font = new Font("Segoe UI", 9),
+                BackColor = Color.Transparent
+            };
+            cardMonit.Controls.Add(lblTempoOnline);
+
+            lblDcCount = new Label
+            {
+                Text = "Desconexoes: 0",
+                Location = new Point(250, 12),
+                AutoSize = true,
+                ForeColor = ACCENT_GREEN,
+                Font = new Font("Segoe UI", 9),
+                BackColor = Color.Transparent
+            };
+            cardMonit.Controls.Add(lblDcCount);
+
+            lblSpikeCount = new Label
+            {
+                Text = "Picos de latencia: 0",
+                Location = new Point(16, 36),
+                AutoSize = true,
+                ForeColor = TEXT_PRIMARY,
+                Font = new Font("Segoe UI", 9),
+                BackColor = Color.Transparent
+            };
+            cardMonit.Controls.Add(lblSpikeCount);
+
+            lblPingMedio = new Label
+            {
+                Text = "Ping medio: 0ms",
+                Location = new Point(250, 36),
+                AutoSize = true,
+                ForeColor = TEXT_PRIMARY,
+                Font = new Font("Segoe UI", 9),
+                BackColor = Color.Transparent
+            };
+            cardMonit.Controls.Add(lblPingMedio);
+
+            var btnRelatorio = new ModernButton
+            {
+                Text = "Gerar Relatorio",
+                Location = new Point(16, 68),
+                Size = new Size(170, 32),
+                BaseColor = Color.FromArgb(30, 40, 80),
+                HoverColor = Color.FromArgb(40, 50, 100),
+                AccentColor = ACCENT_BLUE,
+                Radius = 6,
+                Font = new Font("Segoe UI", 9, FontStyle.Bold)
+            };
+            cardMonit.Controls.Add(btnRelatorio);
+
+            btnRelatorio.Click += (s, e) =>
+            {
+                string relatorio = AntiDC.GerarRelatorio();
+                var dlg = new Form
+                {
+                    Text = "Relatorio Anti-DC",
+                    Size = new Size(520, 440),
+                    StartPosition = FormStartPosition.CenterParent,
+                    FormBorderStyle = FormBorderStyle.FixedDialog,
+                    MaximizeBox = false,
+                    MinimizeBox = false,
+                    BackColor = BG_DARK,
+                    ForeColor = TEXT_PRIMARY
+                };
+                var txt = new TextBox
+                {
+                    Multiline = true,
+                    ReadOnly = true,
+                    ScrollBars = ScrollBars.Vertical,
+                    Text = relatorio,
+                    Location = new Point(12, 12),
+                    Size = new Size(490, 340),
+                    BackColor = BG_INPUT,
+                    ForeColor = TEXT_PRIMARY,
+                    Font = new Font("Consolas", 9),
+                    BorderStyle = BorderStyle.None
+                };
+                dlg.Controls.Add(txt);
+                var btnCopiar = new ModernButton
+                {
+                    Text = "Copiar",
+                    Location = new Point(12, 362),
+                    Size = new Size(120, 32),
+                    BaseColor = Color.FromArgb(30, 40, 80),
+                    HoverColor = Color.FromArgb(40, 50, 100),
+                    AccentColor = ACCENT_BLUE,
+                    Radius = 6,
+                    Font = new Font("Segoe UI", 9, FontStyle.Bold)
+                };
+                dlg.Controls.Add(btnCopiar);
+                btnCopiar.Click += (s2, e2) =>
+                {
+                    Clipboard.SetText(relatorio);
+                    btnCopiar.Text = "Copiado!";
+                };
+                dlg.ShowDialog(this);
+            };
+
+            var btnAbrirLogs = new ModernButton
+            {
+                Text = "Abrir Pasta de Logs",
+                Location = new Point(196, 68),
+                Size = new Size(150, 32),
+                BaseColor = BG_INPUT,
+                HoverColor = Color.FromArgb(50, 52, 62),
+                AccentColor = TEXT_SECONDARY,
+                Radius = 6,
+                Font = new Font("Segoe UI", 9)
+            };
+            cardMonit.Controls.Add(btnAbrirLogs);
+
+            btnAbrirLogs.Click += (s, e) =>
+            {
+                string dir = AntiDC.CaminhoLogDir;
+                Directory.CreateDirectory(dir);
+                Process.Start(new ProcessStartInfo { FileName = dir, UseShellExecute = true });
+            };
+
+            currentY += 150;
+
             // Ping timer
             pingTimer = new System.Windows.Forms.Timer { Interval = 3000 };
             pingTimer.Tick += async (s, e) =>
             {
-                if (!pnlAntiDC.Visible) return;
                 int ms = await AntiDC.PingAsync();
-                if (lblPingValue == null) return;
-                if (ms < 0) { lblPingValue.Text = "Sem resposta"; lblPingValue.ForeColor = ACCENT_RED; }
-                else if (ms < 80) { lblPingValue.Text = $"{ms}ms - Otimo"; lblPingValue.ForeColor = ACCENT_GREEN; }
-                else if (ms < 200) { lblPingValue.Text = $"{ms}ms - Ok"; lblPingValue.ForeColor = ACCENT_YELLOW; }
-                else { lblPingValue.Text = $"{ms}ms - Ruim"; lblPingValue.ForeColor = ACCENT_RED; }
+
+                // Update monitoring stats (always, even if tab not visible)
+                AntiDC.RegistrarPing(ms);
+
+                // Update UI only when visible
+                if (pnlAntiDC.Visible)
+                {
+                    if (lblPingValue != null)
+                    {
+                        if (ms < 0) { lblPingValue.Text = "Sem resposta"; lblPingValue.ForeColor = ACCENT_RED; }
+                        else if (ms < 80) { lblPingValue.Text = $"{ms}ms - Otimo"; lblPingValue.ForeColor = ACCENT_GREEN; }
+                        else if (ms < 200) { lblPingValue.Text = $"{ms}ms - Ok"; lblPingValue.ForeColor = ACCENT_YELLOW; }
+                        else { lblPingValue.Text = $"{ms}ms - Ruim"; lblPingValue.ForeColor = ACCENT_RED; }
+                    }
+
+                    // Update monitoring labels
+                    lblTempoOnline.Text = $"Tempo online: {AntiDC.TempoOnlineStr()}";
+                    lblDcCount.Text = $"Desconexoes: {AntiDC.DcCount}";
+                    lblDcCount.ForeColor = AntiDC.DcCount > 0 ? ACCENT_RED : ACCENT_GREEN;
+                    lblSpikeCount.Text = $"Picos de latencia: {AntiDC.SpikeCount}";
+                    lblPingMedio.Text = $"Ping medio: {AntiDC.PingMedio()}ms";
+                }
             };
             pingTimer.Start();
         }
@@ -3258,6 +3678,7 @@ namespace MacroSupremes
             Win32.UnregisterHotKey(Handle, HOTKEY_PANICO_ID);
             Win32.UnregisterHotKey(Handle, HOTKEY_GRAVAR_ID);
             pingTimer?.Stop(); pingTimer?.Dispose();
+            AntiDC.FinalizarSessao();
             MciPlayer.Fechar();
             brasaoImg?.Dispose();
             SalvarBiblioteca();
