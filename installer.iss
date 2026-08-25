@@ -16,9 +16,9 @@ SetupIconFile=app.ico
 DisableProgramGroupPage=yes
 DisableDirPage=yes
 WizardStyle=modern
-CloseApplications=force
-CloseApplicationsFilter=MacroSupremes.exe
-RestartApplications=yes
+
+[InstallDelete]
+Type: files; Name: "{app}\*.bak"
 
 [Files]
 Source: "bin\Release\net8.0-windows\win-x64\publish\MacroSupremes.exe"; DestDir: "{app}"; Flags: ignoreversion
@@ -40,3 +40,21 @@ FinishedHeadingLabel=Pronto!
 FinishedLabel=Macro Supremes foi instalado. O atalho ja esta na sua area de trabalho.
 ButtonInstall=Instalar
 ButtonFinish=Fechar
+
+[Code]
+procedure KillProcess(const ProcessName: String);
+var
+  ResultCode: Integer;
+begin
+  Exec('taskkill', '/F /IM ' + ProcessName + ' /T', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  Result := '';
+  NeedsRestart := False;
+  KillProcess('MacroSupremes.exe');
+  KillProcess('cmd.exe');
+  KillProcess('powershell.exe');
+  Sleep(1500);
+end;
