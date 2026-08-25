@@ -538,7 +538,7 @@ namespace MacroSupremes
 
     public class MainForm : Form
     {
-        private const string DISCORD_URL = "";
+        private const string DISCORD_URL = "https://discord.gg/qWZhhXKxj";
 
         // Cores do tema
         private static readonly Color BG_DARK = Color.FromArgb(18, 18, 24);

@@ -11,6 +11,7 @@ OutputBaseFilename=MacroSupremes-Setup
 Compression=lzma2/ultra64
 SolidCompression=yes
 PrivilegesRequired=admin
+PrivilegesRequiredOverridesAllowed=dialog
 SetupIconFile=app.ico
 DisableProgramGroupPage=yes
 DisableDirPage=yes
@@ -21,7 +22,8 @@ Source: "bin\Release\net8.0-windows\win-x64\publish\MacroSupremes.exe"; DestDir:
 Source: "bin\Release\net8.0-windows\win-x64\publish\brasao.jpg"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{autodesktop}\Macro Supremes"; Filename: "{app}\MacroSupremes.exe"; IconFilename: "{app}\MacroSupremes.exe"; Comment: "Macro Supremes - WYD Global"
+Name: "{userdesktop}\Macro Supremes"; Filename: "{app}\MacroSupremes.exe"; IconFilename: "{app}\MacroSupremes.exe"; Comment: "Macro Supremes - WYD Global"
+Name: "{commondesktop}\Macro Supremes"; Filename: "{app}\MacroSupremes.exe"; IconFilename: "{app}\MacroSupremes.exe"; Comment: "Macro Supremes - WYD Global"
 Name: "{group}\Macro Supremes"; Filename: "{app}\MacroSupremes.exe"
 Name: "{group}\Desinstalar Macro Supremes"; Filename: "{uninstallexe}"
 
