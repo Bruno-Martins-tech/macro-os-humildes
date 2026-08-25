@@ -55,4 +55,4 @@ Use conforme as regras do seu servidor. O app apenas simula mouse e teclado — 
 
 ---
 
-Criado por **MartinS-** para a guilda **Os Humildes**.
+Criado por **MartinS-** para a guilda **Supremes**.

@@ -12,6 +12,7 @@ using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using Microsoft.Win32;
 
 namespace MacroOsHumildes
 {
@@ -200,18 +201,35 @@ namespace MacroOsHumildes
 
         public static void ReiniciarApp()
         {
-            string exe = Application.ExecutablePath;
-            // Iniciar novo processo como admin (o app exige elevacao)
+            // Preferir ProcessPath (mais confiavel em single-file .NET 8)
+            string exe = Environment.ProcessPath ?? Application.ExecutablePath;
             var psi = new ProcessStartInfo
             {
                 FileName = exe,
-                UseShellExecute = true,
-                Verb = "runas"
+                UseShellExecute = true
+                // Nao usar Verb = "runas" — o app.manifest ja pede elevacao
             };
-            try { Process.Start(psi); } catch { }
-            // Dar tempo pro novo processo iniciar antes de fechar
-            Thread.Sleep(500);
-            Environment.Exit(0);
+            try
+            {
+                var proc = Process.Start(psi);
+                if (proc != null)
+                {
+                    Thread.Sleep(1000);
+                    Environment.Exit(0);
+                }
+                else
+                {
+                    MessageBox.Show(
+                        "Nao foi possivel reiniciar.\nFeche e abra o app manualmente.",
+                        "Aviso", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    $"Erro ao reiniciar: {ex.Message}\nFeche e abra o app manualmente.",
+                    "Erro", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         public static string VersaoAtual => CURRENT_VERSION;
@@ -261,6 +279,54 @@ namespace MacroOsHumildes
             if (!aberto) return;
             mciSendString("close wydmusic", null, 0, IntPtr.Zero);
             aberto = false;
+        }
+    }
+
+    // ======================================================================
+    // PROXY HACK — Login em server full (proxy 0.0.0.4:80)
+    // ======================================================================
+
+    static class ProxyHack
+    {
+        private const string REG_PATH = @"Software\Microsoft\Windows\CurrentVersion\Internet Settings";
+
+        [DllImport("wininet.dll", SetLastError = true)]
+        private static extern bool InternetSetOption(IntPtr hInternet, int dwOption, IntPtr lpBuffer, int dwBufferLength);
+
+        private const int INTERNET_OPTION_SETTINGS_CHANGED = 39;
+        private const int INTERNET_OPTION_REFRESH = 37;
+
+        public static bool IsAtivo()
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(REG_PATH);
+            if (key == null) return false;
+            int enable = (int)(key.GetValue("ProxyEnable", 0) ?? 0);
+            string server = (string)(key.GetValue("ProxyServer", "") ?? "");
+            return enable == 1 && server == "0.0.0.4:80";
+        }
+
+        public static void Ativar()
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(REG_PATH, writable: true);
+            if (key == null) return;
+            key.SetValue("ProxyEnable", 1, RegistryValueKind.DWord);
+            key.SetValue("ProxyServer", "0.0.0.4:80", RegistryValueKind.String);
+            NotificarSistema();
+        }
+
+        public static void Desativar()
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(REG_PATH, writable: true);
+            if (key == null) return;
+            key.SetValue("ProxyEnable", 0, RegistryValueKind.DWord);
+            key.DeleteValue("ProxyServer", throwOnMissingValue: false);
+            NotificarSistema();
+        }
+
+        private static void NotificarSistema()
+        {
+            InternetSetOption(IntPtr.Zero, INTERNET_OPTION_SETTINGS_CHANGED, IntPtr.Zero, 0);
+            InternetSetOption(IntPtr.Zero, INTERNET_OPTION_REFRESH, IntPtr.Zero, 0);
         }
     }
 
@@ -565,9 +631,12 @@ namespace MacroOsHumildes
         // Runas nordicas para decoracao (referencia ao WYD)
         private const string RUNAS = "\u16A0\u16A2\u16A6\u16A8\u16B1\u16B7\u16C1\u16C7\u16D2\u16DE";
 
+        // Brasao da guild (carregado do brasao.jpg ao lado do exe)
+        private Image? brasaoImg;
+
         public MainForm()
         {
-            Text = "MACRO \u2022 OS HUMILDES  \u2014  With Your Destiny";
+            Text = "MACRO \u2022 SUPREMES  \u2014  With Your Destiny";
             ClientSize = new Size(620, 720);
             FormBorderStyle = FormBorderStyle.FixedSingle;
             MaximizeBox = false;
@@ -576,6 +645,11 @@ namespace MacroOsHumildes
             ForeColor = TEXT_PRIMARY;
             DoubleBuffered = true;
             Font = new Font("Segoe UI", 9);
+
+            // Carregar brasao da guild
+            string brasaoPath = Path.Combine(AppContext.BaseDirectory, "brasao.jpg");
+            if (File.Exists(brasaoPath))
+                brasaoImg = Image.FromFile(brasaoPath);
 
             CriarUI();
             CarregarBiblioteca();
@@ -652,46 +726,38 @@ namespace MacroOsHumildes
                 using var goldPen = new Pen(Color.FromArgb(80, 212, 175, 55), 2);
                 g.DrawLine(goldPen, 0, pnlHeader.Height - 1, pnlHeader.Width, pnlHeader.Height - 1);
 
-                // Bandeira do Brasil
-                int bx = 20, by = 14, bw = 52, bh = 36;
-                using var brushVerde = new SolidBrush(Color.FromArgb(0, 155, 58));
-                using var pathFlag = RoundedRect(new Rectangle(bx, by, bw, bh), 4);
-                g.FillPath(brushVerde, pathFlag);
-
-                using var brushAmarelo = new SolidBrush(Color.FromArgb(254, 223, 0));
-                var losango = new PointF[]
+                // Brasao da guild
+                int bx = 12, by = 6, bs = 82;
+                if (brasaoImg != null)
                 {
-                    new(bx + bw / 2f, by + 4), new(bx + bw - 4, by + bh / 2f),
-                    new(bx + bw / 2f, by + bh - 4), new(bx + 4, by + bh / 2f)
-                };
-                g.FillPolygon(brushAmarelo, losango);
+                    g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                    g.DrawImage(brasaoImg, bx, by, bs, bs);
+                }
 
-                using var brushAzul = new SolidBrush(Color.FromArgb(0, 39, 118));
-                float cx = bx + bw / 2f, cy = by + bh / 2f;
-                g.FillEllipse(brushAzul, cx - 8, cy - 8, 16, 16);
+                int textX = bx + bs + 10;
 
                 // Titulo com estilo WYD
                 using var fontTitulo = new Font("Segoe UI", 17, FontStyle.Bold);
-                // Sombra dourada sutil
                 using var brushGoldShadow = new SolidBrush(Color.FromArgb(40, 212, 175, 55));
-                g.DrawString("MACRO \u2022 OS HUMILDES", fontTitulo, brushGoldShadow, bx + bw + 15, by - 1);
+                g.DrawString("MACRO \u2022 SUPREMES", fontTitulo, brushGoldShadow, textX + 1, by + 5);
                 using var brushTitle = new SolidBrush(TEXT_PRIMARY);
-                g.DrawString("MACRO \u2022 OS HUMILDES", fontTitulo, brushTitle, bx + bw + 14, by - 2);
+                g.DrawString("MACRO \u2022 SUPREMES", fontTitulo, brushTitle, textX, by + 4);
 
                 // Subtitulo com referencia WYD
                 using var fontSub = new Font("Segoe UI", 8.5f);
-                using var brushSub = new SolidBrush(Color.FromArgb(212, 175, 55)); // dourado
-                g.DrawString("With Your Destiny \u2022 Guilda Os Humildes \u2022 Server 3", fontSub, brushSub, bx + bw + 16, by + 24);
+                using var brushSub = new SolidBrush(Color.FromArgb(212, 175, 55));
+                g.DrawString("With Your Destiny \u2022 Guilda Supremes \u2022 Server 3", fontSub, brushSub, textX + 2, by + 30);
 
                 // Citacao nordica
                 using var fontCit = new Font("Segoe UI", 7.5f, FontStyle.Italic);
                 using var brushCit = new SolidBrush(Color.FromArgb(80, 180, 180, 200));
-                g.DrawString("\"Os deuses favorecem os persistentes\"", fontCit,
-                    brushCit, bx + bw + 16, by + 42);
+                g.DrawString("\"Os deuses favorecem os Supremes\"", fontCit,
+                    brushCit, textX + 2, by + 48);
 
                 // Versao
                 using var fontVer = new Font("Segoe UI", 7);
-                g.DrawString($"v{AutoUpdater.VersaoAtual}", fontVer, new SolidBrush(TEXT_DIM), pnlHeader.Width - 50, 8);
+                using var brushVer = new SolidBrush(TEXT_DIM);
+                g.DrawString($"v{AutoUpdater.VersaoAtual}", fontVer, brushVer, pnlHeader.Width - 50, 8);
             };
             Controls.Add(pnlHeader);
 
@@ -917,7 +983,7 @@ namespace MacroOsHumildes
 
             var lblCreditos = new Label
             {
-                Text = "Criado por MartinS- \u2022 Os Humildes \u2022 Server 3",
+                Text = "Criado por MartinS- \u2022 Supremes \u2022 Server 3",
                 Location = new Point(340, 8),
                 AutoSize = true,
                 ForeColor = TEXT_SECONDARY,
@@ -1571,6 +1637,74 @@ namespace MacroOsHumildes
                 BackColor = Color.Transparent
             };
             cardVelocidade.Controls.Add(lblVelLabels);
+
+            // Card — Hack Login Server Full
+            var cardProxy = new CardPanel
+            {
+                Location = new Point(16, 370),
+                Size = new Size(588, 90),
+                CardColor = BG_CARD
+            };
+            pnlConfig.Controls.Add(cardProxy);
+
+            var lblTitProxy = new Label
+            {
+                Text = "LOGIN SERVER FULL",
+                Location = new Point(16, 14),
+                AutoSize = true,
+                ForeColor = TEXT_SECONDARY,
+                Font = new Font("Segoe UI", 8, FontStyle.Bold),
+                BackColor = Color.Transparent
+            };
+            cardProxy.Controls.Add(lblTitProxy);
+
+            var lblDescProxy = new Label
+            {
+                Text = "Ativa proxy gateway (0.0.0.4:80) para burlar fila de servidor lotado. Desative apos logar.",
+                Location = new Point(16, 36),
+                Size = new Size(400, 18),
+                ForeColor = TEXT_DIM,
+                Font = new Font("Segoe UI", 8),
+                BackColor = Color.Transparent
+            };
+            cardProxy.Controls.Add(lblDescProxy);
+
+            bool proxyAtivo = ProxyHack.IsAtivo();
+            var btnProxy = new ModernButton
+            {
+                Text = proxyAtivo ? "\u2714  HACK ATIVO" : "\u26A1  Ativar Hack Login",
+                Location = new Point(16, 58),
+                Size = new Size(200, 28),
+                BaseColor = proxyAtivo ? Color.FromArgb(40, 140, 40) : Color.FromArgb(140, 50, 20),
+                HoverColor = proxyAtivo ? Color.FromArgb(50, 170, 50) : Color.FromArgb(170, 60, 25),
+                AccentColor = proxyAtivo ? ACCENT_GREEN : ACCENT_RED,
+                Radius = 6,
+                Font = new Font("Segoe UI", 9, FontStyle.Bold)
+            };
+            btnProxy.Click += (s, ev) =>
+            {
+                bool ativo = ProxyHack.IsAtivo();
+                if (ativo)
+                {
+                    ProxyHack.Desativar();
+                    btnProxy.Text = "\u26A1  Ativar Hack Login";
+                    btnProxy.BaseColor = Color.FromArgb(140, 50, 20);
+                    btnProxy.HoverColor = Color.FromArgb(170, 60, 25);
+                    btnProxy.AccentColor = ACCENT_RED;
+                    AtualizarStatus("Proxy desativado. Conexao normal.", ACCENT_GREEN);
+                }
+                else
+                {
+                    ProxyHack.Ativar();
+                    btnProxy.Text = "\u2714  HACK ATIVO";
+                    btnProxy.BaseColor = Color.FromArgb(40, 140, 40);
+                    btnProxy.HoverColor = Color.FromArgb(50, 170, 50);
+                    btnProxy.AccentColor = ACCENT_GREEN;
+                    AtualizarStatus("Proxy ativado! Logue no WYD e depois desative.", ACCENT_YELLOW);
+                }
+                btnProxy.Invalidate();
+            };
+            cardProxy.Controls.Add(btnProxy);
         }
 
         // Desenho customizado da ListBox
@@ -2311,6 +2445,7 @@ namespace MacroOsHumildes
             Win32.UnregisterHotKey(Handle, HOTKEY_PANICO_ID);
             Win32.UnregisterHotKey(Handle, HOTKEY_GRAVAR_ID);
             MciPlayer.Fechar();
+            brasaoImg?.Dispose();
             SalvarBiblioteca();
             base.OnFormClosing(e);
         }
