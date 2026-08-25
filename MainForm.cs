@@ -12,6 +12,7 @@ using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using System.Net.NetworkInformation;
 using Microsoft.Win32;
 
 namespace MacroSupremes
@@ -320,6 +321,469 @@ namespace MacroSupremes
         }
     }
 
+    // ======================================================================
+    // ANTI-DC — Otimizacoes de rede e processo para reduzir desconexoes
+    // ======================================================================
+    static class AntiDC
+    {
+        private static readonly string TCPIP_INTERFACES = @"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces";
+        private static readonly string TCPIP_PARAMS = @"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters";
+        private static readonly string TCPIP6_PARAMS = @"SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters";
+        private static readonly string NIC_CLASS = @"SYSTEM\CurrentControlSet\Control\Class\{4D36E972-E325-11CE-BFC1-08002bE10318}";
+        private static readonly string[] WYD_NAMES = { "WYD", "WydGlobal", "wyd" };
+
+        // --- TcpNoDelay ---
+        public static bool IsTcpNoDelayAtivo()
+        {
+            try
+            {
+                using var root = Registry.LocalMachine.OpenSubKey(TCPIP_INTERFACES);
+                if (root == null) return false;
+                foreach (var sub in root.GetSubKeyNames())
+                {
+                    using var k = root.OpenSubKey(sub);
+                    if (k?.GetValue("TCPNoDelay") is int v && v == 1) return true;
+                }
+                return false;
+            }
+            catch { return false; }
+        }
+
+        public static void AtivarTcpNoDelay()
+        {
+            try
+            {
+                using var root = Registry.LocalMachine.OpenSubKey(TCPIP_INTERFACES, writable: true);
+                if (root == null) return;
+                foreach (var sub in root.GetSubKeyNames())
+                {
+                    using var k = root.OpenSubKey(sub, writable: true);
+                    k?.SetValue("TCPNoDelay", 1, RegistryValueKind.DWord);
+                }
+            }
+            catch { }
+        }
+
+        public static void DesativarTcpNoDelay()
+        {
+            try
+            {
+                using var root = Registry.LocalMachine.OpenSubKey(TCPIP_INTERFACES, writable: true);
+                if (root == null) return;
+                foreach (var sub in root.GetSubKeyNames())
+                {
+                    using var k = root.OpenSubKey(sub, writable: true);
+                    k?.DeleteValue("TCPNoDelay", throwOnMissingValue: false);
+                }
+            }
+            catch { }
+        }
+
+        // --- TcpAckFrequency ---
+        public static bool IsTcpAckFrequencyAtivo()
+        {
+            try
+            {
+                using var root = Registry.LocalMachine.OpenSubKey(TCPIP_INTERFACES);
+                if (root == null) return false;
+                foreach (var sub in root.GetSubKeyNames())
+                {
+                    using var k = root.OpenSubKey(sub);
+                    if (k?.GetValue("TcpAckFrequency") is int v && v == 1) return true;
+                }
+                return false;
+            }
+            catch { return false; }
+        }
+
+        public static void AtivarTcpAckFrequency()
+        {
+            try
+            {
+                using var root = Registry.LocalMachine.OpenSubKey(TCPIP_INTERFACES, writable: true);
+                if (root == null) return;
+                foreach (var sub in root.GetSubKeyNames())
+                {
+                    using var k = root.OpenSubKey(sub, writable: true);
+                    k?.SetValue("TcpAckFrequency", 1, RegistryValueKind.DWord);
+                }
+            }
+            catch { }
+        }
+
+        public static void DesativarTcpAckFrequency()
+        {
+            try
+            {
+                using var root = Registry.LocalMachine.OpenSubKey(TCPIP_INTERFACES, writable: true);
+                if (root == null) return;
+                foreach (var sub in root.GetSubKeyNames())
+                {
+                    using var k = root.OpenSubKey(sub, writable: true);
+                    k?.DeleteValue("TcpAckFrequency", throwOnMissingValue: false);
+                }
+            }
+            catch { }
+        }
+
+        // --- KeepAlive Curto ---
+        public static bool IsKeepAliveAtivo()
+        {
+            try
+            {
+                using var k = Registry.LocalMachine.OpenSubKey(TCPIP_PARAMS);
+                return k?.GetValue("KeepAliveTime") is int v && v == 60000;
+            }
+            catch { return false; }
+        }
+
+        public static void AtivarKeepAlive()
+        {
+            try
+            {
+                using var k = Registry.LocalMachine.OpenSubKey(TCPIP_PARAMS, writable: true);
+                k?.SetValue("KeepAliveTime", 60000, RegistryValueKind.DWord);
+            }
+            catch { }
+        }
+
+        public static void DesativarKeepAlive()
+        {
+            try
+            {
+                using var k = Registry.LocalMachine.OpenSubKey(TCPIP_PARAMS, writable: true);
+                k?.DeleteValue("KeepAliveTime", throwOnMissingValue: false);
+            }
+            catch { }
+        }
+
+        // --- Desativar IPv6 ---
+        public static bool IsIPv6DesativadoAtivo()
+        {
+            try
+            {
+                using var k = Registry.LocalMachine.OpenSubKey(TCPIP6_PARAMS);
+                return k?.GetValue("DisabledComponents") is int v && v == 0xFF;
+            }
+            catch { return false; }
+        }
+
+        public static void AtivarIPv6Desativado()
+        {
+            try
+            {
+                using var k = Registry.LocalMachine.OpenSubKey(TCPIP6_PARAMS, writable: true);
+                k?.SetValue("DisabledComponents", 0xFF, RegistryValueKind.DWord);
+            }
+            catch { }
+        }
+
+        public static void DesativarIPv6Desativado()
+        {
+            try
+            {
+                using var k = Registry.LocalMachine.OpenSubKey(TCPIP6_PARAMS, writable: true);
+                k?.DeleteValue("DisabledComponents", throwOnMissingValue: false);
+            }
+            catch { }
+        }
+
+        // --- NIC Power Management ---
+        public static bool IsNicPowerMgmtAtivo()
+        {
+            try
+            {
+                using var root = Registry.LocalMachine.OpenSubKey(NIC_CLASS);
+                if (root == null) return false;
+                foreach (var sub in root.GetSubKeyNames())
+                {
+                    using var k = root.OpenSubKey(sub);
+                    if (k?.GetValue("DriverDesc") != null && k.GetValue("PnPCapabilities") is int v && v == 24)
+                        return true;
+                }
+                return false;
+            }
+            catch { return false; }
+        }
+
+        public static void AtivarNicPowerMgmt()
+        {
+            try
+            {
+                using var root = Registry.LocalMachine.OpenSubKey(NIC_CLASS, writable: true);
+                if (root == null) return;
+                foreach (var sub in root.GetSubKeyNames())
+                {
+                    using var k = root.OpenSubKey(sub, writable: true);
+                    if (k?.GetValue("DriverDesc") != null)
+                        k.SetValue("PnPCapabilities", 24, RegistryValueKind.DWord);
+                }
+            }
+            catch { }
+        }
+
+        public static void DesativarNicPowerMgmt()
+        {
+            try
+            {
+                using var root = Registry.LocalMachine.OpenSubKey(NIC_CLASS, writable: true);
+                if (root == null) return;
+                foreach (var sub in root.GetSubKeyNames())
+                {
+                    using var k = root.OpenSubKey(sub, writable: true);
+                    if (k?.GetValue("DriverDesc") != null)
+                        k.DeleteValue("PnPCapabilities", throwOnMissingValue: false);
+                }
+            }
+            catch { }
+        }
+
+        // --- Wi-Fi Power Save ---
+        public static bool IsWifiPowerSaveAtivo()
+        {
+            try
+            {
+                var psi = new ProcessStartInfo("cmd.exe", "/c netsh wlan show settings")
+                { RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true };
+                using var proc = Process.Start(psi);
+                if (proc == null) return false;
+                string output = proc.StandardOutput.ReadToEnd();
+                proc.WaitForExit(5000);
+                return output.Contains("power", StringComparison.OrdinalIgnoreCase) &&
+                       output.Contains("disabled", StringComparison.OrdinalIgnoreCase);
+            }
+            catch { return false; }
+        }
+
+        public static void AtivarWifiPowerSave()
+        {
+            try
+            {
+                var psi = new ProcessStartInfo("cmd.exe", "/c netsh wlan set autoconfig enabled=no interface=\"Wi-Fi\" 2>nul & netsh int tcp set global autotuninglevel=disabled 2>nul")
+                { UseShellExecute = false, CreateNoWindow = true };
+                Process.Start(psi)?.WaitForExit(5000);
+            }
+            catch { }
+        }
+
+        public static void DesativarWifiPowerSave()
+        {
+            try
+            {
+                var psi = new ProcessStartInfo("cmd.exe", "/c netsh wlan set autoconfig enabled=yes interface=\"Wi-Fi\" 2>nul & netsh int tcp set global autotuninglevel=normal 2>nul")
+                { UseShellExecute = false, CreateNoWindow = true };
+                Process.Start(psi)?.WaitForExit(5000);
+            }
+            catch { }
+        }
+
+        // --- Firewall Whitelist ---
+        public static bool IsFirewallWhitelistAtivo()
+        {
+            try
+            {
+                var psi = new ProcessStartInfo("cmd.exe", "/c netsh advfirewall firewall show rule name=\"WYD Global\"")
+                { RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true };
+                using var proc = Process.Start(psi);
+                if (proc == null) return false;
+                string output = proc.StandardOutput.ReadToEnd();
+                proc.WaitForExit(5000);
+                return output.Contains("WYD Global", StringComparison.OrdinalIgnoreCase);
+            }
+            catch { return false; }
+        }
+
+        public static void AtivarFirewallWhitelist()
+        {
+            try
+            {
+                string wydPath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "wyd_launcher", "WYD Global");
+                string cmd = $"/c netsh advfirewall firewall add rule name=\"WYD Global\" dir=in action=allow program=\"{wydPath}\\WYD.exe\" enable=yes 2>nul & " +
+                             $"netsh advfirewall firewall add rule name=\"WYD Global Out\" dir=out action=allow program=\"{wydPath}\\WYD.exe\" enable=yes 2>nul";
+                var psi = new ProcessStartInfo("cmd.exe", cmd)
+                { UseShellExecute = false, CreateNoWindow = true };
+                Process.Start(psi)?.WaitForExit(5000);
+            }
+            catch { }
+        }
+
+        public static void DesativarFirewallWhitelist()
+        {
+            try
+            {
+                var psi = new ProcessStartInfo("cmd.exe", "/c netsh advfirewall firewall delete rule name=\"WYD Global\" 2>nul & netsh advfirewall firewall delete rule name=\"WYD Global Out\" 2>nul")
+                { UseShellExecute = false, CreateNoWindow = true };
+                Process.Start(psi)?.WaitForExit(5000);
+            }
+            catch { }
+        }
+
+        // --- Prioridade Alta ---
+        public static bool IsHighPriorityAtivo()
+        {
+            try
+            {
+                foreach (var name in WYD_NAMES)
+                {
+                    var procs = Process.GetProcessesByName(name);
+                    foreach (var p in procs)
+                    {
+                        try { if (p.PriorityClass == ProcessPriorityClass.High) return true; }
+                        catch { }
+                        finally { p.Dispose(); }
+                    }
+                }
+                return false;
+            }
+            catch { return false; }
+        }
+
+        public static void AtivarHighPriority()
+        {
+            try
+            {
+                foreach (var name in WYD_NAMES)
+                {
+                    var procs = Process.GetProcessesByName(name);
+                    foreach (var p in procs)
+                    {
+                        try { p.PriorityClass = ProcessPriorityClass.High; }
+                        catch { }
+                        finally { p.Dispose(); }
+                    }
+                }
+            }
+            catch { }
+        }
+
+        public static void DesativarHighPriority()
+        {
+            try
+            {
+                foreach (var name in WYD_NAMES)
+                {
+                    var procs = Process.GetProcessesByName(name);
+                    foreach (var p in procs)
+                    {
+                        try { p.PriorityClass = ProcessPriorityClass.Normal; }
+                        catch { }
+                        finally { p.Dispose(); }
+                    }
+                }
+            }
+            catch { }
+        }
+
+        // --- CPU Affinity ---
+        public static bool IsCpuAffinityAtivo()
+        {
+            try
+            {
+                foreach (var name in WYD_NAMES)
+                {
+                    var procs = Process.GetProcessesByName(name);
+                    foreach (var p in procs)
+                    {
+                        try { if (p.ProcessorAffinity == (IntPtr)0x3) return true; }
+                        catch { }
+                        finally { p.Dispose(); }
+                    }
+                }
+                return false;
+            }
+            catch { return false; }
+        }
+
+        public static void AtivarCpuAffinity()
+        {
+            try
+            {
+                foreach (var name in WYD_NAMES)
+                {
+                    var procs = Process.GetProcessesByName(name);
+                    foreach (var p in procs)
+                    {
+                        try { p.ProcessorAffinity = (IntPtr)0x3; }
+                        catch { }
+                        finally { p.Dispose(); }
+                    }
+                }
+            }
+            catch { }
+        }
+
+        public static void DesativarCpuAffinity()
+        {
+            try
+            {
+                int allCores = (1 << Environment.ProcessorCount) - 1;
+                foreach (var name in WYD_NAMES)
+                {
+                    var procs = Process.GetProcessesByName(name);
+                    foreach (var p in procs)
+                    {
+                        try { p.ProcessorAffinity = (IntPtr)allCores; }
+                        catch { }
+                        finally { p.Dispose(); }
+                    }
+                }
+            }
+            catch { }
+        }
+
+        // --- High Performance Power Plan ---
+        public static bool IsHighPerfPlanAtivo()
+        {
+            try
+            {
+                var psi = new ProcessStartInfo("cmd.exe", "/c powercfg /getactivescheme")
+                { RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true };
+                using var proc = Process.Start(psi);
+                if (proc == null) return false;
+                string output = proc.StandardOutput.ReadToEnd();
+                proc.WaitForExit(5000);
+                return output.Contains("8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c", StringComparison.OrdinalIgnoreCase);
+            }
+            catch { return false; }
+        }
+
+        public static void AtivarHighPerfPlan()
+        {
+            try
+            {
+                var psi = new ProcessStartInfo("cmd.exe", "/c powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c")
+                { UseShellExecute = false, CreateNoWindow = true };
+                Process.Start(psi)?.WaitForExit(5000);
+            }
+            catch { }
+        }
+
+        public static void DesativarHighPerfPlan()
+        {
+            try
+            {
+                var psi = new ProcessStartInfo("cmd.exe", "/c powercfg /setactive 381b4222-f694-41f0-9685-ff5bb260df2e")
+                { UseShellExecute = false, CreateNoWindow = true };
+                Process.Start(psi)?.WaitForExit(5000);
+            }
+            catch { }
+        }
+
+        // --- Ping ---
+        public static async Task<int> PingAsync()
+        {
+            try
+            {
+                using var ping = new Ping();
+                var reply = await ping.SendPingAsync("8.8.8.8", 2000);
+                return reply.Status == IPStatus.Success ? (int)reply.RoundtripTime : -1;
+            }
+            catch { return -1; }
+        }
+    }
+
     static class Win32
     {
         public delegate IntPtr HookProc(int nCode, IntPtr wParam, IntPtr lParam);
@@ -609,6 +1073,13 @@ namespace MacroSupremes
         private Panel pnlTutorial = null!;
         private Panel pnlConfig = null!;
 
+        // Anti-DC
+        private ModernButton btnTabAntiDC = null!;
+        private Panel pnlAntiDC = null!;
+        private Label lblPingValue = null!;
+        private Label lblOptCount = null!;
+        private System.Windows.Forms.Timer pingTimer = null!;
+
         private bool carregandoCampos;
         private bool musicaTocando;
         private bool musicaMutada;
@@ -706,11 +1177,13 @@ namespace MacroSupremes
                     Color.FromArgb(12, 14, 28), Color.FromArgb(24, 18, 36));
                 g.FillRectangle(gradBrush, pnlHeader.ClientRectangle);
 
-                // Runas nordicas decorativas no fundo (bem sutis)
-                using var fontRunas = new Font("Segoe UI Symbol", 22);
-                using var brushRunas = new SolidBrush(Color.FromArgb(18, 180, 180, 220));
-                for (int i = 0; i < RUNAS.Length; i++)
-                    g.DrawString(RUNAS[i].ToString(), fontRunas, brushRunas, 8 + i * 60, 60);
+                // Nome da guild estilizado no fundo (sutil, espalhado)
+                using var fontBg = new Font("Segoe UI", 28, FontStyle.Bold | FontStyle.Italic);
+                using var brushBg = new SolidBrush(Color.FromArgb(14, 212, 175, 55));
+                g.DrawString("S U P R E M U S", fontBg, brushBg, 60, 55);
+                using var fontBg2 = new Font("Segoe UI", 14, FontStyle.Bold);
+                using var brushBg2 = new SolidBrush(Color.FromArgb(10, 212, 175, 55));
+                g.DrawString("SUPREMUS  \u2022  SUPREMUS  \u2022  SUPREMUS", fontBg2, brushBg2, 20, 38);
 
                 // Linha de acento dourada embaixo (referencia ao ouro WYD)
                 using var goldPen = new Pen(Color.FromArgb(80, 212, 175, 55), 2);
@@ -758,8 +1231,8 @@ namespace MacroSupremes
             btnTabMacros = new ModernButton
             {
                 Text = "\u2694 MACROS",
-                Location = new Point(16, 5),
-                Size = new Size(110, 32),
+                Location = new Point(8, 5),
+                Size = new Size(90, 32),
                 BaseColor = ACCENT_GREEN,
                 HoverColor = Color.FromArgb(90, 230, 115),
                 ForeColor = Color.FromArgb(10, 10, 10),
@@ -771,8 +1244,8 @@ namespace MacroSupremes
             btnTabTutorial = new ModernButton
             {
                 Text = "\u2139 COMO USAR",
-                Location = new Point(132, 5),
-                Size = new Size(120, 32),
+                Location = new Point(102, 5),
+                Size = new Size(100, 32),
                 BaseColor = Color.FromArgb(45, 47, 55),
                 HoverColor = Color.FromArgb(60, 62, 72),
                 Radius = 6
@@ -783,14 +1256,27 @@ namespace MacroSupremes
             btnTabConfig = new ModernButton
             {
                 Text = "\u2699 CONFIG",
-                Location = new Point(258, 5),
-                Size = new Size(110, 32),
+                Location = new Point(206, 5),
+                Size = new Size(85, 32),
                 BaseColor = Color.FromArgb(45, 47, 55),
                 HoverColor = Color.FromArgb(60, 62, 72),
                 Radius = 6
             };
             btnTabConfig.Click += (s, e) => MostrarAba("config");
             pnlTabs.Controls.Add(btnTabConfig);
+
+            btnTabAntiDC = new ModernButton
+            {
+                Text = "\uD83D\uDEE1 ANTI-DC",
+                Location = new Point(295, 5),
+                Size = new Size(105, 32),
+                BaseColor = Color.FromArgb(45, 47, 55),
+                HoverColor = Color.FromArgb(60, 62, 72),
+                Radius = 6,
+                Font = new Font("Segoe UI", 8.5f, FontStyle.Bold)
+            };
+            btnTabAntiDC.Click += (s, e) => MostrarAba("antidc");
+            pnlTabs.Controls.Add(btnTabAntiDC);
 
             // Botao forcar update
             var btnUpdate = new ModernButton
@@ -886,6 +1372,11 @@ namespace MacroSupremes
             pnlConfig = new Panel { Location = new Point(0, 142), Size = new Size(620, 468), BackColor = BG_DARK, Visible = false };
             Controls.Add(pnlConfig);
             CriarPaginaConfig();
+
+            // --- PAGINA ANTI-DC ---
+            pnlAntiDC = new Panel { Location = new Point(0, 142), Size = new Size(620, 468), BackColor = BG_DARK, Visible = false };
+            Controls.Add(pnlAntiDC);
+            CriarPaginaAntiDC();
 
             // --- STATUS BAR ---
             pnlStatusBar = new Panel { Location = new Point(0, 610), Size = new Size(620, 40), BackColor = Color.FromArgb(22, 24, 30) };
@@ -1697,6 +2188,320 @@ namespace MacroSupremes
             cardProxy.Controls.Add(btnProxy);
         }
 
+        private void CriarPaginaAntiDC()
+        {
+            // --- Hero Card ---
+            var heroCard = new CardPanel
+            {
+                Location = new Point(16, 10),
+                Size = new Size(588, 130),
+                CardColor = BG_CARD
+            };
+            pnlAntiDC.Controls.Add(heroCard);
+
+            heroCard.Controls.Add(new Label
+            {
+                Text = "PROTECAO ANTI-DISCONNECT",
+                Location = new Point(16, 12),
+                AutoSize = true,
+                ForeColor = TEXT_PRIMARY,
+                Font = new Font("Segoe UI", 11, FontStyle.Bold),
+                BackColor = Color.Transparent
+            });
+
+            heroCard.Controls.Add(new Label
+            {
+                Text = "Otimiza rede e processo pra reduzir quedas no WYD",
+                Location = new Point(16, 36),
+                AutoSize = true,
+                ForeColor = TEXT_DIM,
+                Font = new Font("Segoe UI", 8),
+                BackColor = Color.Transparent
+            });
+
+            var btnOtimizarTudo = new ModernButton
+            {
+                Text = "\u26A1 Otimizar Tudo",
+                Location = new Point(16, 58),
+                Size = new Size(170, 32),
+                BaseColor = Color.FromArgb(30, 100, 40),
+                HoverColor = Color.FromArgb(40, 130, 50),
+                AccentColor = ACCENT_GREEN,
+                Radius = 6,
+                Font = new Font("Segoe UI", 9, FontStyle.Bold)
+            };
+            heroCard.Controls.Add(btnOtimizarTudo);
+
+            var btnReverterTudo = new ModernButton
+            {
+                Text = "\u21A9 Reverter Tudo",
+                Location = new Point(196, 58),
+                Size = new Size(170, 32),
+                BaseColor = Color.FromArgb(100, 30, 30),
+                HoverColor = Color.FromArgb(130, 40, 40),
+                AccentColor = ACCENT_RED,
+                Radius = 6,
+                Font = new Font("Segoe UI", 9, FontStyle.Bold)
+            };
+            heroCard.Controls.Add(btnReverterTudo);
+
+            // Ping display
+            heroCard.Controls.Add(new Label
+            {
+                Text = "Ping:",
+                Location = new Point(16, 102),
+                AutoSize = true,
+                ForeColor = TEXT_SECONDARY,
+                Font = new Font("Segoe UI", 8.5f, FontStyle.Bold),
+                BackColor = Color.Transparent
+            });
+
+            lblPingValue = new Label
+            {
+                Text = "Medindo...",
+                Location = new Point(56, 102),
+                AutoSize = true,
+                ForeColor = TEXT_DIM,
+                Font = new Font("Segoe UI", 8.5f, FontStyle.Bold),
+                BackColor = Color.Transparent
+            };
+            heroCard.Controls.Add(lblPingValue);
+
+            lblOptCount = new Label
+            {
+                Text = "0 de 10 otimizacoes ativas",
+                Location = new Point(200, 102),
+                AutoSize = true,
+                ForeColor = TEXT_DIM,
+                Font = new Font("Segoe UI", 8.5f),
+                BackColor = Color.Transparent
+            };
+            heroCard.Controls.Add(lblOptCount);
+
+            // --- Scrollable area ---
+            var pnlScroll = new Panel
+            {
+                Location = new Point(16, 148),
+                Size = new Size(588, 310),
+                AutoScroll = true,
+                BackColor = BG_DARK
+            };
+            pnlAntiDC.Controls.Add(pnlScroll);
+
+            // Collect all toggle panels for count update
+            var togglePanels = new List<(Panel pnl, Func<bool> check)>();
+            int currentY = 0;
+
+            // --- Card REDE ---
+            var lblRede = new Label
+            {
+                Text = "REDE",
+                Location = new Point(0, currentY),
+                AutoSize = true,
+                ForeColor = TEXT_SECONDARY,
+                Font = new Font("Segoe UI", 8, FontStyle.Bold)
+            };
+            pnlScroll.Controls.Add(lblRede);
+            currentY += 22;
+
+            var items = new (string nome, string desc, Func<bool> isAtivo, Action ativar, Action desativar)[]
+            {
+                ("TcpNoDelay", "Envia pacotes imediatamente sem esperar", AntiDC.IsTcpNoDelayAtivo, AntiDC.AtivarTcpNoDelay, AntiDC.DesativarTcpNoDelay),
+                ("Resposta TCP Rapida", "Confirma pacotes sem atraso", AntiDC.IsTcpAckFrequencyAtivo, AntiDC.AtivarTcpAckFrequency, AntiDC.DesativarTcpAckFrequency),
+                ("KeepAlive Curto", "Checa conexao a cada 60s (padrao: 2h)", AntiDC.IsKeepAliveAtivo, AntiDC.AtivarKeepAlive, AntiDC.DesativarKeepAlive),
+                ("Desativar IPv6", "WYD so usa IPv4 (fix oficial)", AntiDC.IsIPv6DesativadoAtivo, AntiDC.AtivarIPv6Desativado, AntiDC.DesativarIPv6Desativado),
+                ("Rede Sempre Ligada", "Impede Windows de desligar o adaptador", AntiDC.IsNicPowerMgmtAtivo, AntiDC.AtivarNicPowerMgmt, AntiDC.DesativarNicPowerMgmt),
+                ("Wi-Fi Maximo", "Desativa economia de energia do Wi-Fi", AntiDC.IsWifiPowerSaveAtivo, AntiDC.AtivarWifiPowerSave, AntiDC.DesativarWifiPowerSave),
+                ("Liberar no Firewall", "Adiciona WYD como excecao no Firewall", AntiDC.IsFirewallWhitelistAtivo, AntiDC.AtivarFirewallWhitelist, AntiDC.DesativarFirewallWhitelist),
+            };
+
+            foreach (var (nome, desc, isAtivo, ativar, desativar) in items)
+            {
+                var p = CriarItemAntiDC(pnlScroll, currentY, nome, desc, isAtivo, ativar, desativar);
+                togglePanels.Add((p, isAtivo));
+                currentY += 56;
+            }
+
+            currentY += 10;
+
+            // --- Card PROCESSO ---
+            var lblProc = new Label
+            {
+                Text = "PROCESSO",
+                Location = new Point(0, currentY),
+                AutoSize = true,
+                ForeColor = TEXT_SECONDARY,
+                Font = new Font("Segoe UI", 8, FontStyle.Bold)
+            };
+            pnlScroll.Controls.Add(lblProc);
+            currentY += 22;
+
+            var procItems = new (string nome, string desc, Func<bool> isAtivo, Action ativar, Action desativar)[]
+            {
+                ("Prioridade Alta", "WYD roda antes de outros programas", AntiDC.IsHighPriorityAtivo, AntiDC.AtivarHighPriority, AntiDC.DesativarHighPriority),
+                ("CPU Otimizada", "Fixa nos nucleos mais rapidos", AntiDC.IsCpuAffinityAtivo, AntiDC.AtivarCpuAffinity, AntiDC.DesativarCpuAffinity),
+                ("Modo Performance", "Plano de energia maximo do Windows", AntiDC.IsHighPerfPlanAtivo, AntiDC.AtivarHighPerfPlan, AntiDC.DesativarHighPerfPlan),
+            };
+
+            foreach (var (nome, desc, isAtivo, ativar, desativar) in procItems)
+            {
+                var p = CriarItemAntiDC(pnlScroll, currentY, nome, desc, isAtivo, ativar, desativar);
+                togglePanels.Add((p, isAtivo));
+                currentY += 56;
+            }
+
+            // Update count helper
+            void AtualizarContagem()
+            {
+                int count = 0;
+                foreach (var (_, check) in togglePanels)
+                {
+                    try { if (check()) count++; } catch { }
+                }
+                lblOptCount.Text = $"{count} de 10 otimizacoes ativas";
+                lblOptCount.ForeColor = count == 0 ? TEXT_DIM : count >= 7 ? ACCENT_GREEN : ACCENT_YELLOW;
+            }
+
+            antiDCRefreshCount = AtualizarContagem;
+            AtualizarContagem();
+
+            // Otimizar Tudo
+            btnOtimizarTudo.Click += (s, e) =>
+            {
+                AntiDC.AtivarTcpNoDelay();
+                AntiDC.AtivarTcpAckFrequency();
+                AntiDC.AtivarKeepAlive();
+                AntiDC.AtivarIPv6Desativado();
+                AntiDC.AtivarNicPowerMgmt();
+                AntiDC.AtivarWifiPowerSave();
+                AntiDC.AtivarFirewallWhitelist();
+                AntiDC.AtivarHighPriority();
+                AntiDC.AtivarCpuAffinity();
+                AntiDC.AtivarHighPerfPlan();
+                foreach (var (pnl, check) in togglePanels) pnl.Invalidate(true);
+                AtualizarContagem();
+                AtualizarStatus("Todas as otimizacoes aplicadas!", ACCENT_GREEN);
+            };
+
+            // Reverter Tudo
+            btnReverterTudo.Click += (s, e) =>
+            {
+                AntiDC.DesativarTcpNoDelay();
+                AntiDC.DesativarTcpAckFrequency();
+                AntiDC.DesativarKeepAlive();
+                AntiDC.DesativarIPv6Desativado();
+                AntiDC.DesativarNicPowerMgmt();
+                AntiDC.DesativarWifiPowerSave();
+                AntiDC.DesativarFirewallWhitelist();
+                AntiDC.DesativarHighPriority();
+                AntiDC.DesativarCpuAffinity();
+                AntiDC.DesativarHighPerfPlan();
+                foreach (var (pnl, check) in togglePanels) pnl.Invalidate(true);
+                AtualizarContagem();
+                AtualizarStatus("Todas as otimizacoes revertidas.", TEXT_DIM);
+            };
+
+            // Ping timer
+            pingTimer = new System.Windows.Forms.Timer { Interval = 3000 };
+            pingTimer.Tick += async (s, e) =>
+            {
+                if (!pnlAntiDC.Visible) return;
+                int ms = await AntiDC.PingAsync();
+                if (lblPingValue == null) return;
+                if (ms < 0) { lblPingValue.Text = "Sem resposta"; lblPingValue.ForeColor = ACCENT_RED; }
+                else if (ms < 80) { lblPingValue.Text = $"{ms}ms - Otimo"; lblPingValue.ForeColor = ACCENT_GREEN; }
+                else if (ms < 200) { lblPingValue.Text = $"{ms}ms - Ok"; lblPingValue.ForeColor = ACCENT_YELLOW; }
+                else { lblPingValue.Text = $"{ms}ms - Ruim"; lblPingValue.ForeColor = ACCENT_RED; }
+            };
+            pingTimer.Start();
+        }
+
+        private Action? antiDCRefreshCount;
+
+        private Panel CriarItemAntiDC(Control parent, int y, string nome, string descricao, Func<bool> isAtivo, Action ativar, Action desativar)
+        {
+            var pnlItem = new Panel
+            {
+                Location = new Point(0, y),
+                Size = new Size(560, 52),
+                BackColor = BG_CARD,
+                Cursor = Cursors.Hand
+            };
+
+            // Custom checkbox indicator
+            var pnlCheck = new Panel
+            {
+                Location = new Point(14, 16),
+                Size = new Size(20, 20),
+                BackColor = Color.Transparent
+            };
+            pnlCheck.Paint += (s, e) =>
+            {
+                e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                var rect = new Rectangle(0, 0, 18, 18);
+                bool ativo = false;
+                try { ativo = isAtivo(); } catch { }
+                if (ativo)
+                {
+                    using var fill = new SolidBrush(ACCENT_GREEN);
+                    using var path = RoundedRect(rect, 4);
+                    e.Graphics.FillPath(fill, path);
+                    using var pen = new Pen(Color.FromArgb(10, 10, 10), 2.2f);
+                    e.Graphics.DrawLine(pen, 4, 9, 8, 14);
+                    e.Graphics.DrawLine(pen, 8, 14, 15, 4);
+                }
+                else
+                {
+                    using var pen = new Pen(Color.FromArgb(80, 80, 90), 1.5f);
+                    using var path = RoundedRect(rect, 4);
+                    e.Graphics.DrawPath(pen, path);
+                }
+            };
+            pnlItem.Controls.Add(pnlCheck);
+
+            var lblNome = new Label
+            {
+                Text = nome,
+                Location = new Point(44, 8),
+                AutoSize = true,
+                ForeColor = TEXT_PRIMARY,
+                Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+                BackColor = Color.Transparent
+            };
+            pnlItem.Controls.Add(lblNome);
+
+            var lblDesc = new Label
+            {
+                Text = descricao,
+                Location = new Point(44, 28),
+                AutoSize = true,
+                ForeColor = TEXT_SECONDARY,
+                Font = new Font("Segoe UI", 8),
+                BackColor = Color.Transparent
+            };
+            pnlItem.Controls.Add(lblDesc);
+
+            // Click handler - toggle
+            void OnClick(object? s, EventArgs e)
+            {
+                try
+                {
+                    if (isAtivo()) desativar(); else ativar();
+                }
+                catch { }
+                pnlCheck.Invalidate();
+                antiDCRefreshCount?.Invoke();
+            }
+
+            pnlItem.Click += OnClick;
+            lblNome.Click += OnClick;
+            lblDesc.Click += OnClick;
+            pnlCheck.Click += OnClick;
+
+            parent.Controls.Add(pnlItem);
+            return pnlItem;
+        }
+
         // Desenho customizado da ListBox
         private void LstMacros_DrawItem(object? sender, DrawItemEventArgs e)
         {
@@ -1770,8 +2575,9 @@ namespace MacroSupremes
             pnlMacros.Visible = aba == "macros";
             pnlTutorial.Visible = aba == "tutorial";
             pnlConfig.Visible = aba == "config";
+            pnlAntiDC.Visible = aba == "antidc";
 
-            foreach (var (btn, id) in new[] { (btnTabMacros, "macros"), (btnTabTutorial, "tutorial"), (btnTabConfig, "config") })
+            foreach (var (btn, id) in new[] { (btnTabMacros, "macros"), (btnTabTutorial, "tutorial"), (btnTabConfig, "config"), (btnTabAntiDC, "antidc") })
             {
                 bool ativo = aba == id;
                 btn.BaseColor = ativo ? ACCENT_GREEN : Color.FromArgb(45, 47, 55);
@@ -2451,6 +3257,7 @@ namespace MacroSupremes
             foreach (var id in hotkeysRegistrados.Keys) Win32.UnregisterHotKey(Handle, id);
             Win32.UnregisterHotKey(Handle, HOTKEY_PANICO_ID);
             Win32.UnregisterHotKey(Handle, HOTKEY_GRAVAR_ID);
+            pingTimer?.Stop(); pingTimer?.Dispose();
             MciPlayer.Fechar();
             brasaoImg?.Dispose();
             SalvarBiblioteca();
