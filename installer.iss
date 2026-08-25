@@ -16,6 +16,9 @@ SetupIconFile=app.ico
 DisableProgramGroupPage=yes
 DisableDirPage=yes
 WizardStyle=modern
+CloseApplications=force
+CloseApplicationsFilter=MacroSupremes.exe
+RestartApplications=yes
 
 [Files]
 Source: "bin\Release\net8.0-windows\win-x64\publish\MacroSupremes.exe"; DestDir: "{app}"; Flags: ignoreversion
