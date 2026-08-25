@@ -453,7 +453,7 @@ namespace MacroOsHumildes
             }
 
             // Texto centralizado
-            var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+            using var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
             using var textBrush = new SolidBrush(Enabled ? ForeColor : Color.FromArgb(80, 80, 80));
             g.DrawString(Text, Font, textBrush, new RectangleF(0, 0, Width, Height), sf);
         }
@@ -675,7 +675,8 @@ namespace MacroOsHumildes
                 // Sombra dourada sutil
                 using var brushGoldShadow = new SolidBrush(Color.FromArgb(40, 212, 175, 55));
                 g.DrawString("MACRO \u2022 OS HUMILDES", fontTitulo, brushGoldShadow, bx + bw + 15, by - 1);
-                g.DrawString("MACRO \u2022 OS HUMILDES", fontTitulo, new SolidBrush(TEXT_PRIMARY), bx + bw + 14, by - 2);
+                using var brushTitle = new SolidBrush(TEXT_PRIMARY);
+                g.DrawString("MACRO \u2022 OS HUMILDES", fontTitulo, brushTitle, bx + bw + 14, by - 2);
 
                 // Subtitulo com referencia WYD
                 using var fontSub = new Font("Segoe UI", 8.5f);
@@ -684,8 +685,9 @@ namespace MacroOsHumildes
 
                 // Citacao nordica
                 using var fontCit = new Font("Segoe UI", 7.5f, FontStyle.Italic);
+                using var brushCit = new SolidBrush(Color.FromArgb(80, 180, 180, 200));
                 g.DrawString("\"Os deuses favorecem os persistentes\"", fontCit,
-                    new SolidBrush(Color.FromArgb(80, 180, 180, 200)), bx + bw + 16, by + 42);
+                    brushCit, bx + bw + 16, by + 42);
 
                 // Versao
                 using var fontVer = new Font("Segoe UI", 7);
@@ -1348,9 +1350,10 @@ namespace MacroOsHumildes
                 e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
                 using var brush = new SolidBrush(accent);
                 e.Graphics.FillEllipse(brush, 0, 0, 30, 30);
-                var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+                using var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
                 using var font = new Font("Segoe UI", 12, FontStyle.Bold);
-                e.Graphics.DrawString(num, font, new SolidBrush(Color.FromArgb(10, 10, 10)), new RectangleF(0, 0, 30, 30), sf);
+                using var brushNum = new SolidBrush(Color.FromArgb(10, 10, 10));
+                e.Graphics.DrawString(num, font, brushNum, new RectangleF(0, 0, 30, 30), sf);
             };
             card.Controls.Add(pnlNum);
 
