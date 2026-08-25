@@ -221,21 +221,15 @@ namespace MacroSupremes
         public static void ReiniciarApp()
         {
             string exe = Environment.ProcessPath ?? Application.ExecutablePath;
-            string bat = Path.Combine(Path.GetTempPath(), "macro_restart.cmd");
 
-            // Bat que espera o app fechar e reabre (herda elevacao do processo pai)
-            File.WriteAllText(bat,
-                "@echo off\r\n" +
-                "timeout /t 2 /nobreak >nul\r\n" +
-                $"start \"\" \"{exe}\"\r\n" +
-                "del \"%~f0\"\r\n");
-
+            // Usar PowerShell para esperar e reabrir com elevacao
+            string ps = $"Start-Sleep -Seconds 2; Start-Process '{exe}'";
             Process.Start(new ProcessStartInfo
             {
-                FileName = "cmd.exe",
-                Arguments = $"/c \"{bat}\"",
-                WindowStyle = ProcessWindowStyle.Hidden,
-                CreateNoWindow = true
+                FileName = "powershell.exe",
+                Arguments = $"-WindowStyle Hidden -Command \"{ps}\"",
+                UseShellExecute = true,
+                WindowStyle = ProcessWindowStyle.Hidden
             });
 
             Environment.Exit(0);
