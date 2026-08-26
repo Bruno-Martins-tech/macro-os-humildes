@@ -289,7 +289,7 @@ namespace MacroSupremes
             {
                 if (!ArquivoParecePE(exeUpd))
                 {
-                    UpdLog.W("boot: .update invalido (sem MZ) — descartado");
+                    UpdLog.W("boot: .update invalido (sem MZ) - descartado");
                     TryDelete(exeUpd); TryDelete(shaFile);
                     return;
                 }
@@ -299,7 +299,7 @@ namespace MacroSupremes
                     string real = CalcularSha256(exeUpd);
                     if (!string.Equals(esperado, real, StringComparison.OrdinalIgnoreCase))
                     {
-                        UpdLog.W("boot: hash do .update nao confere — descartado");
+                        UpdLog.W("boot: hash do .update nao confere - descartado");
                         TryDelete(exeUpd); TryDelete(shaFile);
                         return;
                     }
@@ -319,7 +319,7 @@ namespace MacroSupremes
                 renomeouExe = true;
                 File.Move(exeUpd, exe);   // .update -> exe
                 TryDelete(shaFile);
-                UpdLog.W("boot: swap ok — relancando versao nova");
+                UpdLog.W("boot: swap ok - relancando versao nova");
 
                 Process.Start(new ProcessStartInfo { FileName = exe, UseShellExecute = true });
                 Environment.Exit(0);
@@ -366,7 +366,7 @@ namespace MacroSupremes
                 "function L($m){ try{ Add-Content -LiteralPath $log -Value ('['+(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')+'] swap: '+$m) }catch{} }\n" +
                 "$ok=$false\n" +
                 "for($i=0;$i -lt 60;$i++){ try{ $fs=[IO.File]::Open($exe,'Open','ReadWrite','None'); $fs.Close(); $ok=$true; break }catch{ Start-Sleep -Milliseconds 500 } }\n" +
-                "if(-not $ok){ L 'exe nunca destravou — abortando sem tocar nos arquivos'; Start-Process -FilePath $exe; exit 1 }\n" +
+                "if(-not $ok){ L 'exe nunca destravou - abortando sem tocar nos arquivos'; Start-Process -FilePath $exe; exit 1 }\n" +
                 "$ren=$false\n" +
                 "try{\n" +
                 "  if(Test-Path $bak){ Remove-Item -LiteralPath $bak -Force }\n" +
