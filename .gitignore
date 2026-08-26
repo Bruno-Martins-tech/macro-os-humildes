@@ -6,3 +6,6 @@ obj/
 *.update
 *.bak
 *.sha256
+
+# Instalador gerado pelo Inno Setup (vai pro Release, nao pro repo)
+dist/*.exe
