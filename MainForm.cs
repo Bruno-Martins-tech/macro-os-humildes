@@ -349,6 +349,9 @@ namespace MacroSupremes
         private static readonly string TCPIP6_PARAMS = @"SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters";
         private static readonly string NIC_CLASS = @"SYSTEM\CurrentControlSet\Control\Class\{4D36E972-E325-11CE-BFC1-08002bE10318}";
         private static readonly string[] WYD_NAMES = { "WYD", "WydGlobal", "wyd" };
+        // Seam de teste: permite mirar num nome ficticio (ex.: "WYDTEST") sem tocar no WYD real.
+        internal static string[]? TestProcessNames;
+        private static string[] NomesAlvo => TestProcessNames ?? WYD_NAMES;
 
         // --- TcpNoDelay ---
         public static bool IsTcpNoDelayAtivo()
@@ -639,116 +642,164 @@ namespace MacroSupremes
         }
 
         // --- Prioridade Alta ---
+        // --- Processos WYD (fonte unica; dedup por Id entre os nomes) ---
+        public static List<Process> ObterProcessosWyd()
+        {
+            var lista = new List<Process>();
+            var vistos = new HashSet<int>();
+            foreach (var name in NomesAlvo)
+            {
+                Process[] procs;
+                try { procs = Process.GetProcessesByName(name); }
+                catch { continue; }
+                foreach (var p in procs)
+                {
+                    try
+                    {
+                        if (!vistos.Add(p.Id)) { p.Dispose(); continue; }
+                        lista.Add(p);
+                    }
+                    catch { try { p.Dispose(); } catch { } }
+                }
+            }
+            return lista;
+        }
+
+        public static int ContarWyd()
+        {
+            var ps = ObterProcessosWyd();
+            int n = ps.Count;
+            foreach (var p in ps) { try { p.Dispose(); } catch { } }
+            return n;
+        }
+
+        // Estado desejado (o vigia usa isso pra reaplicar em WYD abertos depois)
+        private static bool _highPriorityDesejado;
+        private static bool _cpuAffinityDesejado;
+        public static bool HighPriorityDesejado => _highPriorityDesejado;
+        public static bool CpuAffinityDesejado => _cpuAffinityDesejado;
+
+        // --- High Priority (aplica em TODAS as instancias abertas) ---
         public static bool IsHighPriorityAtivo()
         {
+            var ps = ObterProcessosWyd();
             try
             {
-                foreach (var name in WYD_NAMES)
-                {
-                    var procs = Process.GetProcessesByName(name);
-                    foreach (var p in procs)
-                    {
-                        try { if (p.PriorityClass == ProcessPriorityClass.High) return true; }
-                        catch { }
-                        finally { p.Dispose(); }
-                    }
-                }
+                foreach (var p in ps)
+                    try { if (p.PriorityClass == ProcessPriorityClass.High) return true; } catch { }
                 return false;
             }
-            catch { return false; }
+            finally { foreach (var p in ps) { try { p.Dispose(); } catch { } } }
         }
 
         public static void AtivarHighPriority()
         {
-            try
+            _highPriorityDesejado = true;
+            AplicarHighPriority();
+        }
+
+        private static void AplicarHighPriority()
+        {
+            var ps = ObterProcessosWyd();
+            foreach (var p in ps)
             {
-                foreach (var name in WYD_NAMES)
-                {
-                    var procs = Process.GetProcessesByName(name);
-                    foreach (var p in procs)
-                    {
-                        try { p.PriorityClass = ProcessPriorityClass.High; }
-                        catch { }
-                        finally { p.Dispose(); }
-                    }
-                }
+                try { if (p.PriorityClass != ProcessPriorityClass.High) p.PriorityClass = ProcessPriorityClass.High; }
+                catch { }
+                finally { try { p.Dispose(); } catch { } }
             }
-            catch { }
         }
 
         public static void DesativarHighPriority()
         {
-            try
+            _highPriorityDesejado = false;
+            var ps = ObterProcessosWyd();
+            foreach (var p in ps)
             {
-                foreach (var name in WYD_NAMES)
-                {
-                    var procs = Process.GetProcessesByName(name);
-                    foreach (var p in procs)
-                    {
-                        try { p.PriorityClass = ProcessPriorityClass.Normal; }
-                        catch { }
-                        finally { p.Dispose(); }
-                    }
-                }
+                try { p.PriorityClass = ProcessPriorityClass.Normal; }
+                catch { }
+                finally { try { p.Dispose(); } catch { } }
             }
-            catch { }
         }
 
-        // --- CPU Affinity ---
+        // total de WYD abertos, e quantos estao em prioridade Alta
+        public static (int total, int aplicados) StatusPrioridade()
+        {
+            var ps = ObterProcessosWyd();
+            int total = ps.Count, ap = 0;
+            foreach (var p in ps)
+            {
+                try { if (p.PriorityClass == ProcessPriorityClass.High) ap++; } catch { }
+                finally { try { p.Dispose(); } catch { } }
+            }
+            return (total, ap);
+        }
+
+        // --- CPU Affinity (adaptavel: espalha as instancias entre os cores da maquina) ---
         public static bool IsCpuAffinityAtivo()
         {
+            long full = AffinityPlan.FullMask(Environment.ProcessorCount);
+            var ps = ObterProcessosWyd();
             try
             {
-                foreach (var name in WYD_NAMES)
-                {
-                    var procs = Process.GetProcessesByName(name);
-                    foreach (var p in procs)
-                    {
-                        try { if (p.ProcessorAffinity == (IntPtr)0x3) return true; }
-                        catch { }
-                        finally { p.Dispose(); }
-                    }
-                }
+                foreach (var p in ps)
+                    try { long m = (long)p.ProcessorAffinity; if (m != 0 && m != full) return true; } catch { }
                 return false;
             }
-            catch { return false; }
+            finally { foreach (var p in ps) { try { p.Dispose(); } catch { } } }
         }
 
         public static void AtivarCpuAffinity()
         {
-            try
+            _cpuAffinityDesejado = true;
+            AplicarCpuAffinity();
+        }
+
+        private static void AplicarCpuAffinity()
+        {
+            int cores = Environment.ProcessorCount;
+            var ps = ObterProcessosWyd();
+            ps.Sort((a, b) => a.Id.CompareTo(b.Id)); // ordem estavel = atribuicao estavel entre reaplicacoes
+            int total = ps.Count;
+            for (int i = 0; i < total; i++)
             {
-                foreach (var name in WYD_NAMES)
-                {
-                    var procs = Process.GetProcessesByName(name);
-                    foreach (var p in procs)
-                    {
-                        try { p.ProcessorAffinity = (IntPtr)0x3; }
-                        catch { }
-                        finally { p.Dispose(); }
-                    }
-                }
+                try { ps[i].ProcessorAffinity = (IntPtr)AffinityPlan.MaskFor(i, total, cores); }
+                catch { }
+                finally { try { ps[i].Dispose(); } catch { } }
             }
-            catch { }
         }
 
         public static void DesativarCpuAffinity()
         {
-            try
+            _cpuAffinityDesejado = false;
+            long full = AffinityPlan.FullMask(Environment.ProcessorCount);
+            var ps = ObterProcessosWyd();
+            foreach (var p in ps)
             {
-                int allCores = (1 << Environment.ProcessorCount) - 1;
-                foreach (var name in WYD_NAMES)
-                {
-                    var procs = Process.GetProcessesByName(name);
-                    foreach (var p in procs)
-                    {
-                        try { p.ProcessorAffinity = (IntPtr)allCores; }
-                        catch { }
-                        finally { p.Dispose(); }
-                    }
-                }
+                try { p.ProcessorAffinity = (IntPtr)full; }
+                catch { }
+                finally { try { p.Dispose(); } catch { } }
             }
-            catch { }
+        }
+
+        // total de WYD abertos, e quantos tem afinidade personalizada (diferente da mascara cheia)
+        public static (int total, int aplicados) StatusAfinidade()
+        {
+            long full = AffinityPlan.FullMask(Environment.ProcessorCount);
+            var ps = ObterProcessosWyd();
+            int total = ps.Count, ap = 0;
+            foreach (var p in ps)
+            {
+                try { long m = (long)p.ProcessorAffinity; if (m != 0 && m != full) ap++; } catch { }
+                finally { try { p.Dispose(); } catch { } }
+            }
+            return (total, ap);
+        }
+
+        // Vigia: reaplica prioridade/afinidade nos WYD atuais (inclui os que abriram depois)
+        public static void ReaplicarProcessos()
+        {
+            if (_highPriorityDesejado) AplicarHighPriority();
+            if (_cpuAffinityDesejado) AplicarCpuAffinity();
         }
 
         // --- High Performance Power Plan ---
@@ -832,8 +883,7 @@ namespace MacroSupremes
 
         public static bool IsWydRunning()
         {
-            string[] nomes = { "WYD", "WydGlobal", "wyd", "Wyd" };
-            foreach (var n in nomes)
+            foreach (var n in NomesAlvo)
             {
                 try
                 {
@@ -1346,6 +1396,7 @@ namespace MacroSupremes
         private Panel pnlAntiDC = null!;
         private Label lblPingValue = null!;
         private Label lblOptCount = null!;
+        private Label lblWydStatus = null!;
         private System.Windows.Forms.Timer pingTimer = null!;
         private Label lblTempoOnline = null!;
         private Label lblDcCount = null!;
@@ -2554,6 +2605,18 @@ namespace MacroSupremes
             };
             heroCard.Controls.Add(lblOptCount);
 
+            // Status dos WYD abertos (contagem + prioridade/afinidade aplicadas por instancia)
+            lblWydStatus = new Label
+            {
+                Text = "WYD: --",
+                Location = new Point(380, 102),
+                AutoSize = true,
+                ForeColor = TEXT_DIM,
+                Font = new Font("Segoe UI", 8.5f, FontStyle.Bold),
+                BackColor = Color.Transparent
+            };
+            heroCard.Controls.Add(lblWydStatus);
+
             // --- Scrollable area ---
             var pnlScroll = new Panel
             {
@@ -2834,6 +2897,9 @@ namespace MacroSupremes
                 // Update monitoring stats (always, even if tab not visible)
                 AntiDC.RegistrarPing(ms);
 
+                // Vigia: reaplica prioridade/afinidade em WYD que abriram depois (roda sempre)
+                AntiDC.ReaplicarProcessos();
+
                 // Update UI only when visible
                 if (pnlAntiDC.Visible)
                 {
@@ -2851,6 +2917,22 @@ namespace MacroSupremes
                     lblDcCount.ForeColor = AntiDC.DcCount > 0 ? ACCENT_RED : ACCENT_GREEN;
                     lblSpikeCount.Text = $"Picos de latencia: {AntiDC.SpikeCount}";
                     lblPingMedio.Text = $"Ping medio: {AntiDC.PingMedio()}ms";
+
+                    // Indicador de WYD: quantos abertos e quantos com prioridade/afinidade aplicada
+                    var sp = AntiDC.StatusPrioridade();
+                    var sa = AntiDC.StatusAfinidade();
+                    if (sp.total == 0)
+                    {
+                        lblWydStatus.Text = "WYD: nenhum aberto";
+                        lblWydStatus.ForeColor = TEXT_DIM;
+                    }
+                    else
+                    {
+                        lblWydStatus.Text = $"WYD: {sp.total} | Prio {sp.aplicados}/{sp.total} | CPU {sa.aplicados}/{sp.total}";
+                        bool tudoOk = (!AntiDC.HighPriorityDesejado || sp.aplicados == sp.total)
+                                   && (!AntiDC.CpuAffinityDesejado || sa.aplicados == sp.total);
+                        lblWydStatus.ForeColor = tudoOk ? ACCENT_GREEN : ACCENT_YELLOW;
+                    }
                 }
             };
             pingTimer.Start();

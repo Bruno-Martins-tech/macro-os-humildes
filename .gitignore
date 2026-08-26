@@ -1,0 +1,8 @@
+# Build .NET
+bin/
+obj/
+
+# Artefatos do auto-update
+*.update
+*.bak
+*.sha256
