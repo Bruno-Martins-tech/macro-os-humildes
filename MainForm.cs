@@ -122,6 +122,28 @@ namespace MacroSupremes
     // AUTO-UPDATER via GitHub Releases
     // ======================================================================
 
+    // Log dedicado do updater (reusa a pasta de logs do app).
+    static class UpdLog
+    {
+        private static readonly string Dir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MacroSupremes", "logs");
+        private static readonly string Arquivo = Path.Combine(Dir, "update-log.txt");
+        private static readonly object _lock = new();
+
+        public static void W(string msg)
+        {
+            try
+            {
+                lock (_lock)
+                {
+                    Directory.CreateDirectory(Dir);
+                    File.AppendAllText(Arquivo, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {msg}{Environment.NewLine}");
+                }
+            }
+            catch { }
+        }
+    }
+
     static class AutoUpdater
     {
         private const string GITHUB_USER = "Bruno-Martins-tech";
@@ -129,22 +151,31 @@ namespace MacroSupremes
         private const string CURRENT_VERSION = "1.10.0";
         private static readonly string API_URL = $"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/releases/latest";
 
+        private static readonly HttpClient http = CriarHttp();
+        private static HttpClient CriarHttp()
+        {
+            var h = new HttpClient { Timeout = TimeSpan.FromMinutes(5) }; // download pode ser grande
+            h.DefaultRequestHeaders.Add("User-Agent", "MacroSupremes-Updater");
+            return h;
+        }
+
+        public static string VersaoAtual => CURRENT_VERSION;
+
+        // Caminho REAL do executavel (em single-file, ProcessPath aponta pro apphost correto).
+        private static string ExePath => Environment.ProcessPath ?? Application.ExecutablePath;
+
         public static async Task<(bool temUpdate, string versaoNova, string downloadUrl)?> ChecarAtualizacao()
         {
             try
             {
-                using var http = new HttpClient();
-                http.DefaultRequestHeaders.Add("User-Agent", "MacroSupremes-Updater");
-                http.Timeout = TimeSpan.FromSeconds(8);
-
-                var json = await http.GetStringAsync(API_URL);
+                using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(10));
+                var json = await http.GetStringAsync(API_URL, cts.Token);
                 using var doc = JsonDocument.Parse(json);
                 var root = doc.RootElement;
 
                 string tagName = root.GetProperty("tag_name").GetString() ?? "";
                 string versaoRemota = tagName.TrimStart('v', 'V');
 
-                // Comparar versoes
                 if (!Version.TryParse(versaoRemota, out var vRemota) ||
                     !Version.TryParse(CURRENT_VERSION, out var vLocal))
                     return null;
@@ -152,14 +183,17 @@ namespace MacroSupremes
                 if (vRemota <= vLocal)
                     return (false, "", "");
 
-                // Encontrar o .exe no release
+                // Allowlist do asset: .exe standalone; NUNCA o instalador (setup/install/instalador).
                 string downloadUrl = "";
                 if (root.TryGetProperty("assets", out var assets))
                 {
                     foreach (var asset in assets.EnumerateArray())
                     {
                         string nome = asset.GetProperty("name").GetString() ?? "";
-                        if (nome.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                        if (nome.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
+                            && nome.IndexOf("setup", StringComparison.OrdinalIgnoreCase) < 0
+                            && nome.IndexOf("install", StringComparison.OrdinalIgnoreCase) < 0
+                            && nome.IndexOf("instalador", StringComparison.OrdinalIgnoreCase) < 0)
                         {
                             downloadUrl = asset.GetProperty("browser_download_url").GetString() ?? "";
                             break;
@@ -169,79 +203,239 @@ namespace MacroSupremes
 
                 return (true, versaoRemota, downloadUrl);
             }
-            catch
+            catch (Exception ex)
             {
-                return null; // sem internet ou repo nao existe ainda — ignorar silenciosamente
+                UpdLog.W("ChecarAtualizacao: " + ex.Message);
+                return null;
             }
         }
 
         public static async Task<bool> BaixarEAtualizar(string downloadUrl, Action<int> onProgress)
         {
+            string exe = ExePath;
+            string exeTmp = exe + ".update.tmp";
+            string exeUpd = exe + ".update";
             try
             {
-                using var http = new HttpClient();
-                http.DefaultRequestHeaders.Add("User-Agent", "MacroSupremes-Updater");
-
                 using var response = await http.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead);
                 response.EnsureSuccessStatusCode();
 
                 long totalBytes = response.Content.Headers.ContentLength ?? -1;
-                string exeAtual = Application.ExecutablePath;
-                string exeNovo = exeAtual + ".update";
-
+                long baixado = 0;
                 using (var stream = await response.Content.ReadAsStreamAsync())
-                using (var file = File.Create(exeNovo))
+                using (var file = File.Create(exeTmp))
                 {
                     var buffer = new byte[81920];
-                    long baixado = 0;
                     int lido;
                     while ((lido = await stream.ReadAsync(buffer, 0, buffer.Length)) > 0)
                     {
                         await file.WriteAsync(buffer, 0, lido);
                         baixado += lido;
-                        if (totalBytes > 0)
-                            onProgress((int)(baixado * 100 / totalBytes));
+                        if (totalBytes > 0) onProgress((int)(baixado * 100 / totalBytes));
                     }
                 }
 
-                // Apenas baixa o .update; o swap e feito pelo script no ReiniciarApp
+                // Integridade do download (nao de autenticidade da origem — ver nota de seguranca).
+                if (totalBytes > 0 && baixado != totalBytes)
+                {
+                    UpdLog.W($"download truncado: {baixado}/{totalBytes}");
+                    TryDelete(exeTmp);
+                    return false;
+                }
+                if (!ArquivoParecePE(exeTmp))
+                {
+                    UpdLog.W("download nao parece .exe valido (sem MZ ou pequeno demais)");
+                    TryDelete(exeTmp);
+                    return false;
+                }
+
+                // Grava o hash e so entao promove .tmp -> .update
+                string sha = CalcularSha256(exeTmp);
+                File.WriteAllText(exeUpd + ".sha256", sha);
+                TryDelete(exeUpd);
+                File.Move(exeTmp, exeUpd);
+                UpdLog.W($"update baixado ok ({baixado} bytes)");
                 return true;
             }
-            catch
+            catch (Exception ex)
             {
+                UpdLog.W("BaixarEAtualizar: " + ex.Message);
+                TryDelete(exeTmp);
                 return false;
             }
         }
 
-        public static void ReiniciarApp()
+        // Chamado no BOOT (Program.Main), antes de abrir a UI.
+        // Se ha um .update valido pendente, faz o swap in-process, relanca e sai.
+        // Se falhar em QUALQUER passo, faz rollback e RETORNA (fail-open: a UI abre normal).
+        // Renomear o proprio exe em execucao E permitido no Windows (o lock impede escrita, nao rename).
+        public static void AplicarUpdateInProcess()
         {
-            string exe = Environment.ProcessPath ?? Application.ExecutablePath;
-            string exeNovo = exe + ".update";
-            string exeBackup = exe + ".bak";
-            int pid = Environment.ProcessId;
+            string exe = ExePath;
+            string exeUpd = exe + ".update";
+            string exeBak = exe + ".bak";
+            string shaFile = exeUpd + ".sha256";
 
-            // Script PowerShell: espera o processo morrer, swap arquivos, reabre com admin
-            string ps =
-                $"$p = Get-Process -Id {pid} -ErrorAction SilentlyContinue; " +
-                $"if ($p) {{ $p.WaitForExit(10000) }}; " +
-                $"Start-Sleep -Milliseconds 500; " +
-                $"if (Test-Path '{exeBackup}') {{ Remove-Item '{exeBackup}' -Force }}; " +
-                $"Rename-Item '{exe}' '{exeBackup}' -Force; " +
-                $"Rename-Item '{exeNovo}' '{exe}' -Force; " +
-                $"Start-Process '{exe}' -Verb RunAs";
-
-            Process.Start(new ProcessStartInfo
+            if (!File.Exists(exeUpd))
             {
-                FileName = "powershell.exe",
-                Arguments = $"-WindowStyle Hidden -Command \"{ps}\"",
-                UseShellExecute = true,
-                WindowStyle = ProcessWindowStyle.Hidden
-            });
+                // Sem update pendente: limpa restos orfaos de tentativas anteriores.
+                TryDelete(exeBak);
+                TryDelete(exe + ".update.tmp");
+                TryDelete(shaFile);
+                return;
+            }
 
-            Environment.Exit(0);
+            try
+            {
+                if (!ArquivoParecePE(exeUpd))
+                {
+                    UpdLog.W("boot: .update invalido (sem MZ) — descartado");
+                    TryDelete(exeUpd); TryDelete(shaFile);
+                    return;
+                }
+                if (File.Exists(shaFile))
+                {
+                    string esperado = File.ReadAllText(shaFile).Trim();
+                    string real = CalcularSha256(exeUpd);
+                    if (!string.Equals(esperado, real, StringComparison.OrdinalIgnoreCase))
+                    {
+                        UpdLog.W("boot: hash do .update nao confere — descartado");
+                        TryDelete(exeUpd); TryDelete(shaFile);
+                        return;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                UpdLog.W("boot valida: " + ex.Message);
+                return; // fail-open
+            }
+
+            bool renomeouExe = false;
+            try
+            {
+                TryDelete(exeBak);
+                File.Move(exe, exeBak);   // exe -> .bak (permitido mesmo em execucao)
+                renomeouExe = true;
+                File.Move(exeUpd, exe);   // .update -> exe
+                TryDelete(shaFile);
+                UpdLog.W("boot: swap ok — relancando versao nova");
+
+                Process.Start(new ProcessStartInfo { FileName = exe, UseShellExecute = true });
+                Environment.Exit(0);
+            }
+            catch (Exception ex)
+            {
+                UpdLog.W("boot swap FALHOU: " + ex.Message);
+                try
+                {
+                    if (renomeouExe && !File.Exists(exe) && File.Exists(exeBak))
+                    {
+                        File.Move(exeBak, exe); // rollback
+                        UpdLog.W("boot: rollback do exe feito");
+                    }
+                }
+                catch (Exception ex2) { UpdLog.W("boot rollback FALHOU: " + ex2.Message); }
+                // fail-open: retorna; o .update fica pendente pra proxima tentativa.
+            }
         }
 
-        public static string VersaoAtual => CURRENT_VERSION;
+        // "Aplicar agora" (app aberto): swap externo robusto -> fecha -> troca -> reabre.
+        // Se algo falhar, o app CONTINUA aberto e o boot aplica o .update na proxima abertura (backstop).
+        // Retorna false se nem conseguiu disparar o swap (app segue aberto).
+        public static bool ReiniciarApp()
+        {
+            string exe = ExePath;
+            string exeUpd = exe + ".update";
+            if (!File.Exists(exeUpd))
+            {
+                UpdLog.W("ReiniciarApp: sem .update pendente");
+                return false;
+            }
+
+            string exeBak = exe + ".bak";
+            string shaFile = exeUpd + ".sha256";
+            string dirApp = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MacroSupremes");
+            string script = Path.Combine(dirApp, "swap-update.ps1");
+            string log = Path.Combine(dirApp, "logs", "update-log.txt");
+
+            // Espera o lock liberar por OPEN EXCLUSIVO (nao por PID), try/catch, rollback, log, relanca SEM RunAs.
+            string ps =
+                "$ErrorActionPreference='Stop'\n" +
+                $"$exe='{exe}'\n$upd='{exeUpd}'\n$bak='{exeBak}'\n$sha='{shaFile}'\n$log='{log}'\n" +
+                "function L($m){ try{ Add-Content -LiteralPath $log -Value ('['+(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')+'] swap: '+$m) }catch{} }\n" +
+                "$ok=$false\n" +
+                "for($i=0;$i -lt 60;$i++){ try{ $fs=[IO.File]::Open($exe,'Open','ReadWrite','None'); $fs.Close(); $ok=$true; break }catch{ Start-Sleep -Milliseconds 500 } }\n" +
+                "if(-not $ok){ L 'exe nunca destravou — abortando sem tocar nos arquivos'; Start-Process -FilePath $exe; exit 1 }\n" +
+                "$ren=$false\n" +
+                "try{\n" +
+                "  if(Test-Path $bak){ Remove-Item -LiteralPath $bak -Force }\n" +
+                "  Rename-Item -LiteralPath $exe -NewName ([IO.Path]::GetFileName($bak)); $ren=$true\n" +
+                "  Rename-Item -LiteralPath $upd -NewName ([IO.Path]::GetFileName($exe))\n" +
+                "  if(Test-Path $sha){ Remove-Item -LiteralPath $sha -Force }\n" +
+                "  L 'swap ok'\n" +
+                "}catch{\n" +
+                "  L ('ERRO: '+$_.Exception.Message)\n" +
+                "  if($ren -and -not (Test-Path $exe) -and (Test-Path $bak)){ Rename-Item -LiteralPath $bak -NewName ([IO.Path]::GetFileName($exe)); L 'rollback feito' }\n" +
+                "}\n" +
+                "Start-Process -FilePath $exe\n";
+
+            try
+            {
+                Directory.CreateDirectory(dirApp);
+                File.WriteAllText(script, ps);
+            }
+            catch (Exception ex)
+            {
+                UpdLog.W("ReiniciarApp gravar script: " + ex.Message);
+                return false; // app continua aberto; backstop no proximo boot
+            }
+
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "powershell.exe",
+                    Arguments = $"-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{script}\"",
+                    UseShellExecute = true,
+                    WindowStyle = ProcessWindowStyle.Hidden
+                });
+            }
+            catch (Exception ex)
+            {
+                UpdLog.W("ReiniciarApp spawn powershell: " + ex.Message);
+                return false; // NAO fecha; backstop no proximo boot aplica o .update
+            }
+
+            Environment.Exit(0); // spawn confirmado: fecha pra liberar o lock
+            return true;         // inalcancavel
+        }
+
+        // --- helpers ---
+        private static bool ArquivoParecePE(string path)
+        {
+            try
+            {
+                var fi = new FileInfo(path);
+                if (!fi.Exists || fi.Length < 1_000_000) return false; // exe single-file tem dezenas de MB
+                using var fs = File.OpenRead(path);
+                int b0 = fs.ReadByte(), b1 = fs.ReadByte();
+                return b0 == 0x4D && b1 == 0x5A; // "MZ"
+            }
+            catch { return false; }
+        }
+
+        private static string CalcularSha256(string path)
+        {
+            using var sha = System.Security.Cryptography.SHA256.Create();
+            using var fs = File.OpenRead(path);
+            return Convert.ToHexString(sha.ComputeHash(fs));
+        }
+
+        private static void TryDelete(string path)
+        {
+            try { if (File.Exists(path)) File.Delete(path); } catch { }
+        }
     }
 
     // Player de musica via MCI (Windows Media)
@@ -582,7 +776,7 @@ namespace MacroSupremes
             {
                 var psi = new ProcessStartInfo("cmd.exe", "/c netsh wlan set autoconfig enabled=no interface=\"Wi-Fi\" 2>nul & netsh int tcp set global autotuninglevel=disabled 2>nul")
                 { UseShellExecute = false, CreateNoWindow = true };
-                Process.Start(psi)?.WaitForExit(5000);
+                using var p = Process.Start(psi); p?.WaitForExit(5000);
             }
             catch { }
         }
@@ -593,7 +787,7 @@ namespace MacroSupremes
             {
                 var psi = new ProcessStartInfo("cmd.exe", "/c netsh wlan set autoconfig enabled=yes interface=\"Wi-Fi\" 2>nul & netsh int tcp set global autotuninglevel=normal 2>nul")
                 { UseShellExecute = false, CreateNoWindow = true };
-                Process.Start(psi)?.WaitForExit(5000);
+                using var p = Process.Start(psi); p?.WaitForExit(5000);
             }
             catch { }
         }
@@ -625,7 +819,7 @@ namespace MacroSupremes
                              $"netsh advfirewall firewall add rule name=\"WYD Global Out\" dir=out action=allow program=\"{wydPath}\\WYD.exe\" enable=yes 2>nul";
                 var psi = new ProcessStartInfo("cmd.exe", cmd)
                 { UseShellExecute = false, CreateNoWindow = true };
-                Process.Start(psi)?.WaitForExit(5000);
+                using var p = Process.Start(psi); p?.WaitForExit(5000);
             }
             catch { }
         }
@@ -636,7 +830,7 @@ namespace MacroSupremes
             {
                 var psi = new ProcessStartInfo("cmd.exe", "/c netsh advfirewall firewall delete rule name=\"WYD Global\" 2>nul & netsh advfirewall firewall delete rule name=\"WYD Global Out\" 2>nul")
                 { UseShellExecute = false, CreateNoWindow = true };
-                Process.Start(psi)?.WaitForExit(5000);
+                using var p = Process.Start(psi); p?.WaitForExit(5000);
             }
             catch { }
         }
@@ -824,7 +1018,7 @@ namespace MacroSupremes
             {
                 var psi = new ProcessStartInfo("cmd.exe", "/c powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c")
                 { UseShellExecute = false, CreateNoWindow = true };
-                Process.Start(psi)?.WaitForExit(5000);
+                using var p = Process.Start(psi); p?.WaitForExit(5000);
             }
             catch { }
         }
@@ -835,7 +1029,7 @@ namespace MacroSupremes
             {
                 var psi = new ProcessStartInfo("cmd.exe", "/c powercfg /setactive 381b4222-f694-41f0-9685-ff5bb260df2e")
                 { UseShellExecute = false, CreateNoWindow = true };
-                Process.Start(psi)?.WaitForExit(5000);
+                using var p = Process.Start(psi); p?.WaitForExit(5000);
             }
             catch { }
         }
@@ -1474,7 +1668,10 @@ namespace MacroSupremes
                 MessageBox.Show(
                     "Atualizacao concluida!\nO app vai reiniciar.",
                     "Sucesso", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                AutoUpdater.ReiniciarApp();
+                if (!AutoUpdater.ReiniciarApp())
+                    MessageBox.Show(
+                        "Nao consegui reiniciar automaticamente.\nFeche e abra o app de novo — a atualizacao sera aplicada na proxima abertura.",
+                        "Reinicie manualmente", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
             else
             {
@@ -1643,7 +1840,10 @@ namespace MacroSupremes
                 {
                     MessageBox.Show("Atualizacao concluida!\nO app vai reiniciar.",
                         "Sucesso", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    AutoUpdater.ReiniciarApp();
+                    if (!AutoUpdater.ReiniciarApp())
+                        MessageBox.Show(
+                            "Nao consegui reiniciar automaticamente.\nFeche e abra o app de novo — a atualizacao sera aplicada na proxima abertura.",
+                            "Reinicie manualmente", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 }
                 else
                     AtualizarStatus("Erro ao baixar atualizacao", ACCENT_RED);
@@ -3246,9 +3446,10 @@ namespace MacroSupremes
                 cmbHotkey.SelectedIndex = i >= 0 ? i : 0;
             }
 
-            nudRepeticoes.Value = macroSelecionado.Repeticoes;
-            nudIntervalo.Value = macroSelecionado.IntervaloMs;
-            nudAtraso.Value = macroSelecionado.AtrasoInicialMs;
+            // Clamp defensivo: JSON adulterado/antigo nao pode estourar ArgumentOutOfRangeException
+            nudRepeticoes.Value = Math.Clamp(macroSelecionado.Repeticoes, (int)nudRepeticoes.Minimum, (int)nudRepeticoes.Maximum);
+            nudIntervalo.Value = Math.Clamp(macroSelecionado.IntervaloMs, (int)nudIntervalo.Minimum, (int)nudIntervalo.Maximum);
+            nudAtraso.Value = Math.Clamp(macroSelecionado.AtrasoInicialMs, (int)nudAtraso.Minimum, (int)nudAtraso.Maximum);
             lblAcoes.Text = $"{macroSelecionado.Eventos.Count} acoes gravadas";
 
             carregandoCampos = false;
@@ -3424,6 +3625,16 @@ namespace MacroSupremes
             mouseHookId = Win32.SetWindowsHookEx(Win32.WH_MOUSE_LL, mouseHookProc, hMod, 0);
             keyboardHookProc = KeyboardHookCallback;
             keyboardHookId = Win32.SetWindowsHookEx(Win32.WH_KEYBOARD_LL, keyboardHookProc, hMod, 0);
+
+            // Se algum hook nao instalou, a gravacao ficaria "morta" em silencio: reverte e avisa.
+            if (mouseHookId == IntPtr.Zero || keyboardHookId == IntPtr.Zero)
+            {
+                if (mouseHookId != IntPtr.Zero) { Win32.UnhookWindowsHookEx(mouseHookId); mouseHookId = IntPtr.Zero; }
+                if (keyboardHookId != IntPtr.Zero) { Win32.UnhookWindowsHookEx(keyboardHookId); keyboardHookId = IntPtr.Zero; }
+                gravando = false;
+                gravacaoStopwatch?.Stop();
+                AtualizarStatus("Erro ao iniciar a gravacao (hook negado). Rode como admin e tente de novo.", ACCENT_RED);
+            }
         }
 
         private void PararGravacao()
