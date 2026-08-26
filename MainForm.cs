@@ -148,7 +148,7 @@ namespace MacroSupremes
     {
         private const string GITHUB_USER = "Bruno-Martins-tech";
         private const string GITHUB_REPO = "macro-os-humildes";
-        private const string CURRENT_VERSION = "1.10.0";
+        private const string CURRENT_VERSION = "1.11.0";
         private static readonly string API_URL = $"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/releases/latest";
 
         private static readonly HttpClient http = CriarHttp();
