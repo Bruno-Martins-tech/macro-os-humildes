@@ -1779,6 +1779,12 @@ namespace MacroSupremes
         private ModernButton btnPararReproducao = null!;
         private Label lblEstadoGravacao = null!;
 
+        // Overlay de contagem regressiva (3..2..1) antes de gravar
+        private Panel pnlOverlay = null!;
+        private string overlayTexto = "";
+        private string overlaySub = "";
+        private Color overlayCor = Color.FromArgb(212, 175, 55);
+
         // Abas
         private ModernButton btnTabMacros = null!;
         private ModernButton btnTabTutorial = null!;
@@ -2263,6 +2269,67 @@ namespace MacroSupremes
                 Font = new Font("Segoe UI", 7)
             };
             pnlRodape.Controls.Add(lblAviso);
+
+            // --- OVERLAY de contagem regressiva (cobre a area de conteudo) ---
+            pnlOverlay = new Panel
+            {
+                Location = new Point(0, 142),
+                Size = new Size(620, 468),
+                BackColor = Color.FromArgb(13, 13, 18),
+                Visible = false
+            };
+            pnlOverlay.Paint += (s, e) =>
+            {
+                var g = e.Graphics;
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+                var full = new RectangleF(0, 0, pnlOverlay.Width, pnlOverlay.Height);
+                using var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+                using (var big = new Font("Segoe UI", 96, FontStyle.Bold))
+                using (var brBig = new SolidBrush(overlayCor))
+                    g.DrawString(overlayTexto, big, brBig, new RectangleF(0, -30, pnlOverlay.Width, pnlOverlay.Height), sf);
+                if (!string.IsNullOrEmpty(overlaySub))
+                {
+                    using var f2 = new Font("Segoe UI", 12);
+                    using var br2 = new SolidBrush(TEXT_SECONDARY);
+                    g.DrawString(overlaySub, f2, br2, new RectangleF(0, pnlOverlay.Height / 2f + 70, pnlOverlay.Width, 30), sf);
+                }
+            };
+            Controls.Add(pnlOverlay);
+        }
+
+        private void MostrarOverlay(string txt, string sub, Color cor)
+        {
+            if (InvokeRequired) { BeginInvoke(() => MostrarOverlay(txt, sub, cor)); return; }
+            overlayTexto = txt; overlaySub = sub; overlayCor = cor;
+            pnlOverlay.Visible = true;
+            pnlOverlay.BringToFront();
+            pnlOverlay.Invalidate();
+        }
+
+        private void EsconderOverlay()
+        {
+            if (InvokeRequired) { BeginInvoke(EsconderOverlay); return; }
+            pnlOverlay.Visible = false;
+        }
+
+        // Countdown 3..2..1 (overlay) e entao inicia a gravacao. Fonte unica p/ botao e hotkey F9.
+        private void IniciarContagemEGravar()
+        {
+            if (gravando || reproduzindo) return;
+            btnGravar.Enabled = false;
+            btnPararGravacao.Enabled = true;
+            Task.Run(() =>
+            {
+                for (int i = 3; i > 0; i--)
+                {
+                    MostrarOverlay(i.ToString(), "prepare-se pra gravar...", ACCENT_GOLD);
+                    Thread.Sleep(1000);
+                }
+                MostrarOverlay("JÁ!", "gravando seus cliques", ACCENT_RED);
+                Thread.Sleep(350);
+                BeginInvoke(() => { EsconderOverlay(); IniciarGravacao(); });
+            });
         }
 
         // --- PAGINA MACROS ---
@@ -2378,7 +2445,7 @@ namespace MacroSupremes
             // Campos
             int lx = 16, rx = 190, y = 42, gap = 38;
 
-            AddLabel(cardConfig, "Atalho", lx, y);
+            AddLabel(cardConfig, "Tecla de atalho", lx, y);
             cmbHotkey = new ComboBox
             {
                 Location = new Point(rx, y - 3),
@@ -2395,19 +2462,19 @@ namespace MacroSupremes
             cardConfig.Controls.Add(cmbHotkey);
 
             y += gap;
-            AddLabel(cardConfig, "Repeticoes (0 = infinito)", lx, y);
+            AddLabel(cardConfig, "Repetir (0 = sempre)", lx, y);
             nudRepeticoes = CriarNumeric(new Point(rx, y - 3), 0, 99999, 0);
             nudRepeticoes.ValueChanged += CampoAlterado;
             cardConfig.Controls.Add(nudRepeticoes);
 
             y += gap;
-            AddLabel(cardConfig, "Intervalo entre voltas (ms)", lx, y);
+            AddLabel(cardConfig, "Pausa entre repetições (ms)", lx, y);
             nudIntervalo = CriarNumeric(new Point(rx, y - 3), 0, 999999, 1000);
             nudIntervalo.ValueChanged += CampoAlterado;
             cardConfig.Controls.Add(nudIntervalo);
 
             y += gap;
-            AddLabel(cardConfig, "Atraso inicial (ms)", lx, y);
+            AddLabel(cardConfig, "Espera pra começar (ms)", lx, y);
             nudAtraso = CriarNumeric(new Point(rx, y - 3), 0, 999999, 0);
             nudAtraso.ValueChanged += CampoAlterado;
             cardConfig.Controls.Add(nudAtraso);
@@ -2426,7 +2493,7 @@ namespace MacroSupremes
 
             var lblTitAcoes = new Label
             {
-                Text = "GRAVACAO",
+                Text = "GRAVAÇÃO",
                 Location = new Point(16, 14),
                 AutoSize = true,
                 ForeColor = TEXT_SECONDARY,
@@ -2437,18 +2504,18 @@ namespace MacroSupremes
 
             lblAcoes = new Label
             {
-                Text = "0 acoes gravadas",
-                Location = new Point(16, 36),
+                Text = "0 ações gravadas",
+                Location = new Point(16, 34),
                 AutoSize = true,
                 ForeColor = ACCENT_GREEN,
-                Font = new Font("Segoe UI", 9, FontStyle.Bold),
+                Font = new Font("Segoe UI", 12.5f, FontStyle.Bold),
                 BackColor = Color.Transparent
             };
             cardAcoes.Controls.Add(lblAcoes);
 
             btnGravar = new ModernButton
             {
-                Text = $"\u25CF  Gravar ({biblioteca.Config.HotkeyGravar})",
+                Text = $"\u2460  Gravar ({biblioteca.Config.HotkeyGravar})",
                 Location = new Point(16, 62),
                 Size = new Size(145, 34),
                 BaseColor = Color.FromArgb(180, 40, 40),
@@ -2472,7 +2539,7 @@ namespace MacroSupremes
 
             btnTestar = new ModernButton
             {
-                Text = "\u25B6  Testar",
+                Text = "\u2461  Testar",
                 Location = new Point(16, 104),
                 Size = new Size(145, 34),
                 BaseColor = Color.FromArgb(40, 130, 50),
@@ -2510,7 +2577,7 @@ namespace MacroSupremes
             // Botao Salvar + Limpar gravacao
             var btnSalvarMacro = new ModernButton
             {
-                Text = "\u2714  Salvar",
+                Text = "\u2462  Salvar",
                 Location = new Point(16, 168),
                 Size = new Size(110, 28),
                 BaseColor = Color.FromArgb(30, 90, 150),
@@ -2753,7 +2820,7 @@ namespace MacroSupremes
             y += gap;
 
             // Hotkey panico
-            AddLabel(cardAtalhos, "Panico (parar tudo)", lx, y);
+            AddLabel(cardAtalhos, "Emergência (para tudo)", lx, y);
             cmbConfigPanico = new ComboBox
             {
                 Location = new Point(rx, y - 3),
@@ -3834,20 +3901,7 @@ namespace MacroSupremes
         private void BtnGravar_Click(object? sender, EventArgs e)
         {
             if (macroSelecionado == null) { AtualizarStatus("Selecione um macro primeiro", ACCENT_YELLOW); return; }
-            if (gravando || reproduzindo) return;
-
-            btnGravar.Enabled = false;
-            btnPararGravacao.Enabled = true;
-
-            Task.Run(() =>
-            {
-                for (int i = 3; i > 0; i--)
-                {
-                    AtualizarStatus($"Gravacao comeca em {i}...", ACCENT_YELLOW);
-                    Thread.Sleep(1000);
-                }
-                BeginInvoke(IniciarGravacao);
-            });
+            IniciarContagemEGravar();
         }
 
         private void IniciarGravacao()
@@ -4200,19 +4254,7 @@ namespace MacroSupremes
                     if (gravando)
                         PararGravacao();
                     else if (!reproduzindo && macroSelecionado != null)
-                    {
-                        btnGravar.Enabled = false;
-                        btnPararGravacao.Enabled = true;
-                        Task.Run(() =>
-                        {
-                            for (int i = 3; i > 0; i--)
-                            {
-                                AtualizarStatus($"Gravacao comeca em {i}...", ACCENT_YELLOW);
-                                Thread.Sleep(1000);
-                            }
-                            BeginInvoke(IniciarGravacao);
-                        });
-                    }
+                        IniciarContagemEGravar();
                     return;
                 }
                 if (hotkeysRegistrados.TryGetValue(id, out int macroIdx) && macroIdx >= 0 && macroIdx < biblioteca.Macros.Count)
