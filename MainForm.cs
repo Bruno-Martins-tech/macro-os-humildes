@@ -1805,8 +1805,32 @@ namespace MacroSupremes
         // Runas nordicas para decoracao (referencia ao WYD)
         private const string RUNAS = "\u16A0\u16A2\u16A6\u16A8\u16B1\u16B7\u16C1\u16C7\u16D2\u16DE";
 
-        // Brasao da guild (carregado do brasao.jpg ao lado do exe)
+        // Brasao da guild
         private Image? brasaoImg;
+
+        // Carrega o brasao: 1o do recurso EMBUTIDO no exe (portavel), senao do arquivo ao lado.
+        private static Image? CarregarBrasao()
+        {
+            try
+            {
+                var asm = System.Reflection.Assembly.GetExecutingAssembly();
+                var nome = Array.Find(asm.GetManifestResourceNames(),
+                    n => n.EndsWith("brasao.jpg", StringComparison.OrdinalIgnoreCase));
+                if (nome != null)
+                {
+                    using var st = asm.GetManifestResourceStream(nome);
+                    if (st != null) return Image.FromStream(st);
+                }
+            }
+            catch { }
+            try
+            {
+                string p = Path.Combine(AppContext.BaseDirectory, "brasao.jpg");
+                if (File.Exists(p)) return Image.FromFile(p);
+            }
+            catch { }
+            return null;
+        }
 
         public MainForm()
         {
@@ -1820,10 +1844,8 @@ namespace MacroSupremes
             DoubleBuffered = true;
             Font = new Font("Segoe UI", 9);
 
-            // Carregar brasao da guild
-            string brasaoPath = Path.Combine(AppContext.BaseDirectory, "brasao.jpg");
-            if (File.Exists(brasaoPath))
-                brasaoImg = Image.FromFile(brasaoPath);
+            // Carregar brasao da guild (embutido no exe; fallback pro arquivo ao lado)
+            brasaoImg = CarregarBrasao();
 
             CriarUI();
             CarregarBiblioteca();
@@ -1894,8 +1916,13 @@ namespace MacroSupremes
                     Color.FromArgb(12, 14, 28), Color.FromArgb(24, 18, 36));
                 g.FillRectangle(gradBrush, pnlHeader.ClientRectangle);
 
+                // Wordmark da guilda ao fundo (sutil): profundidade + cara "brasonada" medieval
+                using (var fontWm = new Font("Segoe UI", 30, FontStyle.Bold | FontStyle.Italic))
+                using (var brWm = new SolidBrush(Color.FromArgb(20, 212, 175, 55)))
+                    g.DrawString("SUPREMES", fontWm, brWm, pnlHeader.Width - 305, 22);
+
                 // Linha de acento dourada embaixo (referencia ao ouro WYD)
-                using var goldPen = new Pen(Color.FromArgb(80, 212, 175, 55), 2);
+                using var goldPen = new Pen(Color.FromArgb(110, 212, 175, 55), 2);
                 g.DrawLine(goldPen, 0, pnlHeader.Height - 1, pnlHeader.Width, pnlHeader.Height - 1);
 
                 // Brasao da guild
@@ -1919,6 +1946,11 @@ namespace MacroSupremes
                 using var fontSub = new Font("Segoe UI", 9);
                 using var brushSub = new SolidBrush(Color.FromArgb(212, 175, 55));
                 g.DrawString("Guilda Supremes \u2022 WYD Server 3", fontSub, brushSub, textX + 2, by + 34);
+
+                // Runas nordicas (cara medieval), sutis em dourado. Segoe UI Historic cobre o bloco Runic.
+                using var fontRune = new Font("Segoe UI Historic", 11);
+                using var brushRune = new SolidBrush(Color.FromArgb(95, 212, 175, 55));
+                g.DrawString(RUNAS, fontRune, brushRune, textX + 2, by + 52);
 
                 // Versao (canto superior direito)
                 using var fontVer = new Font("Segoe UI", 7.5f);
