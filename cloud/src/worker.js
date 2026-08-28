@@ -254,6 +254,7 @@ export default {
         if (p === '/admin/accounts' && m === 'GET') return await handleAdminAccounts(env);
         if (p === '/admin/revoke' && m === 'POST') return await handleAdminRevoke(request, env);
         if (p === '/admin/reset-machine' && m === 'POST') return await handleAdminResetMachine(request, env);
+        if (p === '/admin/check-patch' && m === 'POST') { await checarPatchWyd(env); return json({ ok: true, checked: true }); }
       }
 
       return json({ ok: false, reason: 'nao_encontrado' }, 404);
