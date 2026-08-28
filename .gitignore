@@ -2,6 +2,11 @@
 bin/
 obj/
 
+# Pastas de publish (exe self-contained; vai pro Release, nao pro repo)
+publish_staging/
+publish_v*/
+publish/
+
 # Artefatos do auto-update
 *.update
 *.bak
