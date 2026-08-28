@@ -176,6 +176,32 @@ C:\Users\bnobm\.dotnet\dotnet.exe publish MacroOsHumildes.csproj -c Release -o p
 
 ---
 
+## Canal de Staging (testes sem afetar a guild)
+
+Existe um canal separado pra testar mudancas antes de mandar pra guild. E o MESMO codigo,
+ligado por um simbolo de build. Nada da staging chega em quem usa a stable.
+
+**Como buildar staging:**
+```
+dotnet publish -c Release -p:Staging=true -o publish_staging
+```
+Gera `MacroSupremes-Staging.exe`.
+
+**O que muda no build staging (isolamento total):**
+- **Nome do exe:** `MacroSupremes-Staging.exe` (roda lado a lado com a stable)
+- **Pasta de dados:** `%APPDATA%\MacroSupremes-Staging\` (macros/config/logs proprios; nao mistura com a stable)
+- **Canal de update:** puxa **pre-releases** do GitHub (a stable so pega o `latest`, que exclui pre-release)
+- **Titulo da janela:** ganha o selo `[STAGING]`
+
+**Fluxo recomendado:**
+1. Testar na staging: `gh release create v1.12.0-beta1 publish_staging/MacroSupremes-Staging.exe --prerelease --title "..." --notes "..."`
+2. So o app staging (que o dono roda) recebe esse pre-release. A guild na stable nao ve.
+3. Validado, promover pra stable: build normal (`dotnet publish -c Release`) + `gh release create v1.12.0 ... ` **sem** `--prerelease`.
+
+Ponto unico de controle no codigo: classe `Canal` em `MainForm.cs` (`Canal.PastaApp`, `Canal.EhStaging`, `Canal.SufixoTitulo`).
+
+---
+
 ## Distribuicao
 
 ### Para novos usuarios

@@ -119,14 +119,36 @@ namespace MacroSupremes
     // ======================================================================
 
     // ======================================================================
+    // CANAL DE DISTRIBUICAO (stable x staging)
+    // ======================================================================
+    // Controlado pelo simbolo de build STAGING (dotnet build -p:Staging=true).
+    // Staging = app isolado: pasta de dados propria (nao mistura macros/config com a stable)
+    // e canal de update que inclui pre-releases. A guild nunca ve a staging.
+    internal static class Canal
+    {
+#if STAGING
+        public const bool EhStaging = true;
+        public const string PastaApp = "MacroSupremes-Staging";
+        public const string SufixoTitulo = "   [STAGING]";
+#else
+        public const bool EhStaging = false;
+        public const string PastaApp = "MacroSupremes";
+        public const string SufixoTitulo = "";
+#endif
+
+        // Raiz de dados em %APPDATA%\<PastaApp>
+        public static string DirDados => Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), PastaApp);
+    }
+
+    // ======================================================================
     // AUTO-UPDATER via GitHub Releases
     // ======================================================================
 
     // Log dedicado do updater (reusa a pasta de logs do app).
     static class UpdLog
     {
-        private static readonly string Dir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MacroSupremes", "logs");
+        private static readonly string Dir = Path.Combine(Canal.DirDados, "logs");
         private static readonly string Arquivo = Path.Combine(Dir, "update-log.txt");
         private static readonly object _lock = new();
 
@@ -149,7 +171,10 @@ namespace MacroSupremes
         private const string GITHUB_USER = "Bruno-Martins-tech";
         private const string GITHUB_REPO = "macro-os-humildes";
         private const string CURRENT_VERSION = "1.11.0";
-        private static readonly string API_URL = $"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/releases/latest";
+        // Stable pega so o "latest" (exclui pre-release). Staging lista tudo e usa o mais recente (inclui pre-release).
+        private static readonly string API_URL = Canal.EhStaging
+            ? $"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/releases"
+            : $"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/releases/latest";
 
         private static readonly HttpClient http = CriarHttp();
         private static HttpClient CriarHttp()
@@ -172,6 +197,13 @@ namespace MacroSupremes
                 var json = await http.GetStringAsync(API_URL, cts.Token);
                 using var doc = JsonDocument.Parse(json);
                 var root = doc.RootElement;
+
+                // No canal staging a API devolve um ARRAY de releases; pega o mais recente (inclui pre-release).
+                if (root.ValueKind == JsonValueKind.Array)
+                {
+                    if (root.GetArrayLength() == 0) return (false, "", "");
+                    root = root[0];
+                }
 
                 string tagName = root.GetProperty("tag_name").GetString() ?? "";
                 string versaoRemota = tagName.TrimStart('v', 'V');
@@ -355,7 +387,7 @@ namespace MacroSupremes
 
             string exeBak = exe + ".bak";
             string shaFile = exeUpd + ".sha256";
-            string dirApp = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MacroSupremes");
+            string dirApp = Canal.DirDados;
             string script = Path.Combine(dirApp, "swap-update.ps1");
             string log = Path.Combine(dirApp, "logs", "update-log.txt");
 
@@ -1084,8 +1116,7 @@ namespace MacroSupremes
         // DC MONITOR — Log de desconexoes, spikes e sessoes
         // ======================================================================
 
-        private static readonly string LogDir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MacroSupremes", "logs");
+        private static readonly string LogDir = Path.Combine(Canal.DirDados, "logs");
         private static readonly List<int> pingHistory = new();
         private static readonly object pingLock = new();
         private static DateTime? sessaoInicio;
@@ -1555,8 +1586,7 @@ namespace MacroSupremes
         private static readonly Color TEXT_SECONDARY = Color.FromArgb(142, 142, 147);
         private static readonly Color TEXT_DIM = Color.FromArgb(90, 90, 100);
 
-        private static readonly string AppDataDir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MacroSupremes");
+        private static readonly string AppDataDir = Canal.DirDados;
         private static readonly string MacrosPath = Path.Combine(AppDataDir, "macros.json");
 
         // Dados
@@ -1642,7 +1672,7 @@ namespace MacroSupremes
 
         public MainForm()
         {
-            Text = "MACRO \u2022 SUPREMES  \u2014  With Your Destiny";
+            Text = "MACRO \u2022 SUPREMES  \u2014  With Your Destiny" + Canal.SufixoTitulo;
             ClientSize = new Size(620, 720);
             FormBorderStyle = FormBorderStyle.FixedSingle;
             MaximizeBox = false;
