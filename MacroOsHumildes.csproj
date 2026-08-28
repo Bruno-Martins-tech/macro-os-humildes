@@ -30,6 +30,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- DPAPI: cifra a senha guardada localmente (licenca.bin) atrelada ao usuario do Windows -->
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Update="brasao.jpg">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

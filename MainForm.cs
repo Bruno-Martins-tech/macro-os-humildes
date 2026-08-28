@@ -196,6 +196,25 @@ namespace MacroSupremes
             }
             catch { /* offline/erro: telemetria e best-effort, ignora */ }
         }
+
+        // POST de licenca (register/validate). Devolve (ok, motivo). "sem_conexao" = servidor fora do ar.
+        public static async Task<(bool ok, string reason)> PostLicencaAsync(string rota, string phone, string senha)
+        {
+            try
+            {
+                var payload = JsonSerializer.Serialize(new { phone, password = senha, machine = MaquinaId.Hash() });
+                using var content = new StringContent(payload, System.Text.Encoding.UTF8, "application/json");
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                var resp = await http.PostAsync(BaseUrl + rota, content, cts.Token);
+                var body = await resp.Content.ReadAsStringAsync(cts.Token);
+                using var doc = JsonDocument.Parse(body);
+                var root = doc.RootElement;
+                bool ok = root.TryGetProperty("ok", out var okEl) && okEl.ValueKind == JsonValueKind.True;
+                string reason = root.TryGetProperty("reason", out var rEl) ? (rEl.GetString() ?? "") : "";
+                return (ok, reason);
+            }
+            catch { return (false, "sem_conexao"); }
+        }
     }
 
     // ======================================================================

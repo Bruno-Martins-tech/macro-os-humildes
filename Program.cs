@@ -12,11 +12,16 @@ namespace MacroSupremes
             try { AutoUpdater.AplicarUpdateInProcess(); }
             catch (Exception ex) { UpdLog.W("Main boot: " + ex.Message); }
 
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
+
+            // Licenca (telefone + senha). Modo suave: a tela aparece mas da pra pular.
+            // No modo duro (Licenca.BloquearSemLicenca), sem licenca valida o app nao abre.
+            if (!Licenca.GarantirNoBoot()) return;
+
             // Sinal de vida anonimo (telemetria de uso). Fire-and-forget, nao bloqueia a abertura.
             _ = Backend.EnviarHeartbeatAsync(AutoUpdater.VersaoAtual);
 
-            Application.EnableVisualStyles();
-            Application.SetCompatibleTextRenderingDefault(false);
             Application.Run(new MainForm());
         }
     }
