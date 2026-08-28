@@ -2745,43 +2745,53 @@ namespace MacroSupremes
 
             int y = 0;
 
-            y = AddTutorialStep(scroll, y, "1", "GRAVAR UM MACRO",
-                "1. Selecione um macro na lista (ex: \"Auto Pergaminho da Agua\")\n" +
-                $"2. Pressione  {biblioteca.Config.HotkeyGravar}  ou clique no botao  \u25CF Gravar\n" +
-                "3. Espere a contagem regressiva de 3 segundos\n" +
-                "4. Faca as acoes no jogo (cliques, teclas)\n" +
-                "5. Pressione  ESC  para parar a gravacao",
+            y = AddTutorialStep(scroll, y, "1", "COMECE POR AQUI",
+                "Este app grava seus cliques e teclas e repete sozinho no WYD.\n" +
+                "\u2022  Ele ja vem com 4 macros prontos na aba MACROS.\n" +
+                "\u2022  O Auto Chat (F7) ja funciona. Os outros voce grava 1 vez.\n" +
+                "\u2022  Precisa rodar como admin (ele ja pede isso ao abrir).\n" +
+                "\u2022  Na lista, bolinha verde = ja tem acoes; cinza = falta gravar.",
+                ACCENT_GOLD);
+
+            y = AddTutorialStep(scroll, y, "2", "GRAVAR SEU MACRO",
+                "1. Na aba MACROS, clique num macro da lista (ex: Auto Pergaminho).\n" +
+                $"2. Clique em  \u2460 Gravar  (ou aperte  {biblioteca.Config.HotkeyGravar}).\n" +
+                "3. Aparece uma contagem  3 \u00B7 2 \u00B7 1  na tela. Quando sumir, comece.\n" +
+                "4. Faca no jogo os cliques e teclas que quer repetir.\n" +
+                "5. Aperte  ESC  para parar. Pronto, ja fica salvo (bolinha verde).",
                 ACCENT_RED);
 
-            y = AddTutorialStep(scroll, y, "2", "TESTAR O MACRO",
-                "1. Selecione o macro gravado\n" +
-                "2. Clique no botao  \u25B6 Testar\n" +
-                "3. O macro vai repetir suas acoes automaticamente\n" +
-                $"4. Para parar:  {biblioteca.Config.HotkeyPanico}  ou clique em Parar",
+            y = AddTutorialStep(scroll, y, "3", "TESTAR E USAR NO JOGO",
+                "\u2022  Clique em  \u2461 Testar  pra ver o macro repetindo.\n" +
+                "\u2022  Gostou? Escolha uma  Tecla de atalho  (F5, F6...) no macro e  \u2462 Salvar.\n" +
+                "\u2022  No jogo, aperte essa tecla pra ligar/desligar o macro.\n" +
+                $"\u2022  {biblioteca.Config.HotkeyPanico}  (Emergencia) para TUDO na hora, de qualquer tela.\n" +
+                "\u2022  Enquanto grava, uma faixa vermelha aparece no topo (REC).",
                 ACCENT_GREEN);
 
-            y = AddTutorialStep(scroll, y, "3", "USAR COM O WYD",
-                "1. Abra o WYD e este app (os dois precisam rodar como admin)\n" +
-                "2. Configure o atalho do macro (F5, F6, etc.)\n" +
-                "3. Va para o jogo e pressione o atalho (ex: F5)\n" +
-                "4. O macro roda em loop enquanto voce joga\n" +
-                $"5.  {biblioteca.Config.HotkeyPanico}  para tudo de qualquer tela",
-                ACCENT_BLUE);
-
             y = AddTutorialStep(scroll, y, "4", "AUTO CHAT (JA PRONTO)",
-                "O macro \"Auto Chat\" ja vem configurado:\n" +
-                "\u2022  Digite sua mensagem no chat do jogo e envie\n" +
-                "\u2022  Pressione  F7  para ativar o auto-reenvio\n" +
-                "\u2022  A cada 12s ele repete: Enter \u2192 Seta cima \u2192 Enter\n" +
-                "\u2022  Perfeito para divulgar compra/venda no chat",
+                "O macro Auto Chat ja vem pronto pra divulgar no chat:\n" +
+                "\u2022  Digite sua mensagem no chat do jogo e envie uma vez.\n" +
+                "\u2022  Aperte  F7  pra ligar o reenvio automatico.\n" +
+                "\u2022  A cada 12s ele repete: Enter \u2192 Seta cima \u2192 Enter.\n" +
+                "\u2022  Otimo pra anunciar compra/venda sem ficar digitando.",
                 ACCENT_YELLOW);
 
-            y = AddTutorialStep(scroll, y, "5", "DICAS AVANCADAS",
-                "\u2022  Repeticoes = 0  significa loop infinito\n" +
-                "\u2022  Atraso inicial: util pra usar item quando fica disponivel (AFK)\n" +
-                "\u2022  Intervalo entre voltas: pausa entre cada repeticao\n" +
-                "\u2022  Cada pessoa precisa gravar seus proprios macros de inventario\n" +
-                "   (as posicoes dos slots variam por resolucao de tela)",
+            y = AddTutorialStep(scroll, y, "5", "ANTI-DC E SERVIDOR LOTADO",
+                "Na aba ANTI-DC da pra deixar a conexao e o PC mais estaveis:\n" +
+                "\u2022  Ligue as otimizacoes (prioridade do WYD, rede, Wi-Fi maximo).\n" +
+                "\u2022  O monitor mostra seu ping e quantas desconexoes deu.\n" +
+                "\u2022  Na barra de baixo, o botao  \u26A1 Entrar no servidor lotado  ajuda\n" +
+                "   a logar quando o servidor esta cheio. DESLIGUE depois de entrar.",
+                ACCENT_BLUE);
+
+            y = AddTutorialStep(scroll, y, "6", "AJUSTES E DICAS",
+                "\u2022  Repetir = 0  \u2192 repete pra sempre (ate voce parar).\n" +
+                "\u2022  Pausa entre repeticoes  \u2192 espera entre uma volta e outra.\n" +
+                "\u2022  Espera pra comecar  \u2192 util pra usar item quando ele fica pronto (AFK).\n" +
+                "\u2022  Velocidade e Volume da musica ficam na aba CONFIG.\n" +
+                "\u2022  Cada um grava seus proprios macros de inventario\n" +
+                "   (a posicao dos slots muda conforme a tela).",
                 TEXT_SECONDARY);
         }
 
