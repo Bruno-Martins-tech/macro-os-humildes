@@ -996,6 +996,40 @@ namespace MacroSupremes
             if (_cpuAffinityDesejado) AplicarCpuAffinity();
         }
 
+        // Igual a ReaplicarProcessos + StatusPrioridade + StatusAfinidade, mas enumerando os processos
+        // UMA vez so (antes eram ate 4 enumeracoes por tick de 3s). Reaplica o desejado e devolve os status.
+        public static (int total, int prioAplicados, int cpuAplicados) ReaplicarEObterStatus()
+        {
+            var ps = ObterProcessosWyd();
+            try
+            {
+                int total = ps.Count;
+
+                if (_cpuAffinityDesejado && total > 0)
+                {
+                    ps.Sort((a, b) => a.Id.CompareTo(b.Id)); // ordem estavel = atribuicao estavel
+                    int cores = Environment.ProcessorCount;
+                    for (int i = 0; i < total; i++)
+                        try { ps[i].ProcessorAffinity = (IntPtr)AffinityPlan.MaskFor(i, total, cores); } catch { }
+                }
+                if (_highPriorityDesejado)
+                {
+                    foreach (var p in ps)
+                        try { if (p.PriorityClass != ProcessPriorityClass.High) p.PriorityClass = ProcessPriorityClass.High; } catch { }
+                }
+
+                long full = AffinityPlan.FullMask(Environment.ProcessorCount);
+                int prio = 0, cpu = 0;
+                foreach (var p in ps)
+                {
+                    try { if (p.PriorityClass == ProcessPriorityClass.High) prio++; } catch { }
+                    try { long m = (long)p.ProcessorAffinity; if (m != 0 && m != full) cpu++; } catch { }
+                }
+                return (total, prio, cpu);
+            }
+            finally { foreach (var p in ps) { try { p.Dispose(); } catch { } } }
+        }
+
         // --- High Performance Power Plan ---
         public static bool IsHighPerfPlanAtivo()
         {
@@ -1412,26 +1446,11 @@ namespace MacroSupremes
     // CONTROLES CUSTOMIZADOS — visual moderno
     // ======================================================================
 
-    // Painel com cantos arredondados e fundo semi-transparente (card)
-    public class CardPanel : Panel
+    // Helpers graficos compartilhados (evita duplicar codigo de desenho)
+    internal static class Gfx
     {
-        public int Radius { get; set; } = 12;
-        public Color CardColor { get; set; } = Color.FromArgb(38, 40, 48);
-
-        protected override void OnPaint(PaintEventArgs e)
-        {
-            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-            using var path = RoundedRect(ClientRectangle, Radius);
-            using var brush = new SolidBrush(CardColor);
-            e.Graphics.FillPath(brush, path);
-        }
-
-        protected override void OnPaintBackground(PaintEventArgs e)
-        {
-            // nao pintar background padrao
-        }
-
-        private static GraphicsPath RoundedRect(Rectangle bounds, int radius)
+        // Caminho de retangulo com cantos arredondados (fonte unica; antes duplicado em 3 lugares)
+        public static GraphicsPath RoundedRect(Rectangle bounds, int radius)
         {
             int d = radius * 2;
             var path = new GraphicsPath();
@@ -1441,6 +1460,26 @@ namespace MacroSupremes
             path.AddArc(bounds.X, bounds.Bottom - d, d, d, 90, 90);
             path.CloseFigure();
             return path;
+        }
+    }
+
+    // Painel com cantos arredondados e fundo semi-transparente (card)
+    public class CardPanel : Panel
+    {
+        public int Radius { get; set; } = 12;
+        public Color CardColor { get; set; } = Color.FromArgb(38, 40, 48);
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            using var path = Gfx.RoundedRect(ClientRectangle, Radius);
+            using var brush = new SolidBrush(CardColor);
+            e.Graphics.FillPath(brush, path);
+        }
+
+        protected override void OnPaintBackground(PaintEventArgs e)
+        {
+            // nao pintar background padrao
         }
     }
 
@@ -1473,7 +1512,7 @@ namespace MacroSupremes
             var rect = new Rectangle(0, 0, Width - 1, Height - 1);
             Color bg = pressing ? PressColor : hovering ? HoverColor : BaseColor;
 
-            using var path = RoundedRect(rect, Radius);
+            using var path = Gfx.RoundedRect(rect, Radius);
             using var brush = new SolidBrush(bg);
             g.FillPath(brush, path);
 
@@ -1494,18 +1533,6 @@ namespace MacroSupremes
         protected override void OnMouseLeave(EventArgs e) { hovering = false; pressing = false; Invalidate(); base.OnMouseLeave(e); }
         protected override void OnMouseDown(MouseEventArgs e) { pressing = true; Invalidate(); base.OnMouseDown(e); }
         protected override void OnMouseUp(MouseEventArgs e) { pressing = false; Invalidate(); base.OnMouseUp(e); }
-
-        private static GraphicsPath RoundedRect(Rectangle bounds, int radius)
-        {
-            int d = radius * 2;
-            var path = new GraphicsPath();
-            path.AddArc(bounds.X, bounds.Y, d, d, 180, 90);
-            path.AddArc(bounds.Right - d, bounds.Y, d, d, 270, 90);
-            path.AddArc(bounds.Right - d, bounds.Bottom - d, d, d, 0, 90);
-            path.AddArc(bounds.X, bounds.Bottom - d, d, d, 90, 90);
-            path.CloseFigure();
-            return path;
-        }
     }
 
     // ======================================================================
@@ -1546,6 +1573,8 @@ namespace MacroSupremes
         private volatile bool reproduzindo;
         private int voltaAtual;
         private Macro? macroReproduzindo;
+        // Sinalizado ao parar: acorda a espera na hora (sem polling de 50ms) e deixa o timing exato
+        private readonly ManualResetEventSlim sinalParar = new(false);
 
         // Hooks
         private Win32.HookProc? mouseHookProc;
@@ -1598,7 +1627,6 @@ namespace MacroSupremes
         private Label lblPingMedio = null!;
 
         private bool carregandoCampos;
-        private bool musicaTocando;
         private bool musicaMutada;
 
         // Caminho da musica do WYD (login.mp3)
@@ -3097,8 +3125,9 @@ namespace MacroSupremes
                 // Update monitoring stats (always, even if tab not visible)
                 AntiDC.RegistrarPing(ms);
 
-                // Vigia: reaplica prioridade/afinidade em WYD que abriram depois (roda sempre)
-                AntiDC.ReaplicarProcessos();
+                // Vigia: reaplica prioridade/afinidade em WYD que abriram depois (roda sempre).
+                // Uma unica enumeracao de processos ja devolve os status usados na UI abaixo.
+                var (wydTotal, prioAplicados, cpuAplicados) = AntiDC.ReaplicarEObterStatus();
 
                 // Update UI only when visible
                 if (pnlAntiDC.Visible)
@@ -3119,18 +3148,16 @@ namespace MacroSupremes
                     lblPingMedio.Text = $"Ping medio: {AntiDC.PingMedio()}ms";
 
                     // Indicador de WYD: quantos abertos e quantos com prioridade/afinidade aplicada
-                    var sp = AntiDC.StatusPrioridade();
-                    var sa = AntiDC.StatusAfinidade();
-                    if (sp.total == 0)
+                    if (wydTotal == 0)
                     {
                         lblWydStatus.Text = "WYD: nenhum aberto";
                         lblWydStatus.ForeColor = TEXT_DIM;
                     }
                     else
                     {
-                        lblWydStatus.Text = $"WYD: {sp.total} | Prio {sp.aplicados}/{sp.total} | CPU {sa.aplicados}/{sp.total}";
-                        bool tudoOk = (!AntiDC.HighPriorityDesejado || sp.aplicados == sp.total)
-                                   && (!AntiDC.CpuAffinityDesejado || sa.aplicados == sp.total);
+                        lblWydStatus.Text = $"WYD: {wydTotal} | Prio {prioAplicados}/{wydTotal} | CPU {cpuAplicados}/{wydTotal}";
+                        bool tudoOk = (!AntiDC.HighPriorityDesejado || prioAplicados == wydTotal)
+                                   && (!AntiDC.CpuAffinityDesejado || cpuAplicados == wydTotal);
                         lblWydStatus.ForeColor = tudoOk ? ACCENT_GREEN : ACCENT_YELLOW;
                     }
                 }
@@ -3166,7 +3193,7 @@ namespace MacroSupremes
                 if (ativo)
                 {
                     using var fill = new SolidBrush(ACCENT_GREEN);
-                    using var path = RoundedRect(rect, 4);
+                    using var path = Gfx.RoundedRect(rect, 4);
                     e.Graphics.FillPath(fill, path);
                     using var pen = new Pen(Color.FromArgb(10, 10, 10), 2.2f);
                     e.Graphics.DrawLine(pen, 4, 9, 8, 14);
@@ -3175,7 +3202,7 @@ namespace MacroSupremes
                 else
                 {
                     using var pen = new Pen(Color.FromArgb(80, 80, 90), 1.5f);
-                    using var path = RoundedRect(rect, 4);
+                    using var path = Gfx.RoundedRect(rect, 4);
                     e.Graphics.DrawPath(pen, path);
                 }
             };
@@ -3224,6 +3251,9 @@ namespace MacroSupremes
             return pnlItem;
         }
 
+        // Fonte reutilizada no desenho da lista (evita alocar um Font por item a cada redesenho)
+        private static readonly Font FonteListaMacros = new("Segoe UI", 9.5f);
+
         // Desenho customizado da ListBox
         private void LstMacros_DrawItem(object? sender, DrawItemEventArgs e)
         {
@@ -3246,9 +3276,8 @@ namespace MacroSupremes
             }
 
             string text = lstMacros.Items[e.Index].ToString() ?? "";
-            using var font = new Font("Segoe UI", 9.5f);
             using var textBrush = new SolidBrush(fg);
-            g.DrawString(text, font, textBrush, e.Bounds.X + 10, e.Bounds.Y + 6);
+            g.DrawString(text, FonteListaMacros, textBrush, e.Bounds.X + 10, e.Bounds.Y + 6);
         }
 
         // Helpers
@@ -3288,7 +3317,6 @@ namespace MacroSupremes
                 MciPlayer.Abrir(WYD_MUSIC_PATH);
                 MciPlayer.SetVolume(150); // volume baixinho (0-1000)
                 MciPlayer.Tocar(loop: true);
-                musicaTocando = true;
             }
         }
 
@@ -3306,18 +3334,6 @@ namespace MacroSupremes
                 btn.ForeColor = ativo ? Color.FromArgb(10, 10, 10) : TEXT_PRIMARY;
                 btn.Invalidate();
             }
-        }
-
-        private static GraphicsPath RoundedRect(Rectangle bounds, int radius)
-        {
-            int d = radius * 2;
-            var path = new GraphicsPath();
-            path.AddArc(bounds.X, bounds.Y, d, d, 180, 90);
-            path.AddArc(bounds.Right - d, bounds.Y, d, d, 270, 90);
-            path.AddArc(bounds.Right - d, bounds.Bottom - d, d, d, 0, 90);
-            path.AddArc(bounds.X, bounds.Bottom - d, d, d, 90, 90);
-            path.CloseFigure();
-            return path;
         }
 
         // ==================================================================
@@ -3408,6 +3424,38 @@ namespace MacroSupremes
             }
         }
 
+        private System.Windows.Forms.Timer? saveDebounceTimer;
+        private bool salvamentoPendente;
+
+        // Salvamento adiado: arrastar um NumericUpDown/campo dispara varios eventos seguidos.
+        // Em vez de serializar e escrever em disco a cada tique, junta tudo numa unica escrita ~600ms
+        // depois da ultima alteracao. Flush garantido ao fechar o app.
+        private void SalvarBibliotecaDebounced()
+        {
+            salvamentoPendente = true;
+            if (saveDebounceTimer == null)
+            {
+                saveDebounceTimer = new System.Windows.Forms.Timer { Interval = 600 };
+                saveDebounceTimer.Tick += (s, e) =>
+                {
+                    saveDebounceTimer!.Stop();
+                    FlushSalvamentoPendente();
+                };
+            }
+            saveDebounceTimer.Stop();
+            saveDebounceTimer.Start();
+        }
+
+        private void FlushSalvamentoPendente()
+        {
+            saveDebounceTimer?.Stop();
+            if (salvamentoPendente)
+            {
+                salvamentoPendente = false;
+                SalvarBiblioteca();
+            }
+        }
+
         // ==================================================================
         // UI — Atualizacao de lista e campos
         // ==================================================================
@@ -3468,7 +3516,7 @@ namespace MacroSupremes
             int idx = lstMacros.SelectedIndex;
             if (idx >= 0) lstMacros.Items[idx] = macroSelecionado.ToString();
             if (hotkeyAnterior != macroSelecionado.Hotkey) RegistrarHotkeys();
-            SalvarBiblioteca();
+            SalvarBibliotecaDebounced();
         }
 
         // Feedback claro no card de acoes (aparece e some apos 4s)
@@ -3742,6 +3790,7 @@ namespace MacroSupremes
             reproduzindo = true;
             macroReproduzindo = macro;
             voltaAtual = 0;
+            sinalParar.Reset();
 
             BeginInvoke(() =>
             {
@@ -3756,6 +3805,7 @@ namespace MacroSupremes
         private void PararReproducao()
         {
             reproduzindo = false;
+            sinalParar.Set(); // acorda a espera imediatamente (botao de panico responde na hora)
             macroReproduzindo = null;
             BeginInvoke(() =>
             {
@@ -3823,13 +3873,9 @@ namespace MacroSupremes
 
         private void DormirCancelavel(int ms)
         {
-            int dormido = 0;
-            while (dormido < ms && reproduzindo)
-            {
-                int pedaco = Math.Min(50, ms - dormido);
-                Thread.Sleep(pedaco);
-                dormido += pedaco;
-            }
+            if (ms <= 0 || !reproduzindo) return;
+            // Espera exata e cancelavel: acorda no tempo certo ou na hora em que a reproducao e parada.
+            sinalParar.Wait(ms);
         }
 
         private void ExecutarEvento(MacroEvent evt)
@@ -4007,6 +4053,9 @@ namespace MacroSupremes
             AntiDC.FinalizarSessao();
             MciPlayer.Fechar();
             brasaoImg?.Dispose();
+            saveDebounceTimer?.Stop(); saveDebounceTimer?.Dispose();
+            salvamentoPendente = false; // o SalvarBiblioteca abaixo ja persiste o estado atual
+            sinalParar.Dispose();
             SalvarBiblioteca();
             base.OnFormClosing(e);
         }
