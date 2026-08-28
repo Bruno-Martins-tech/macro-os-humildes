@@ -1597,6 +1597,15 @@ namespace MacroSupremes
     // Helpers graficos compartilhados (evita duplicar codigo de desenho)
     internal static class Gfx
     {
+        // Clareia/escurece uma cor (delta em cada canal). Usado no gradiente sutil dos cards.
+        public static Color Shift(Color c, int delta)
+        {
+            int r = Math.Clamp(c.R + delta, 0, 255);
+            int g = Math.Clamp(c.G + delta, 0, 255);
+            int b = Math.Clamp(c.B + delta, 0, 255);
+            return Color.FromArgb(c.A, r, g, b);
+        }
+
         // Caminho de retangulo com cantos arredondados (fonte unica; antes duplicado em 3 lugares)
         public static GraphicsPath RoundedRect(Rectangle bounds, int radius)
         {
@@ -1617,12 +1626,29 @@ namespace MacroSupremes
         public int Radius { get; set; } = 12;
         public Color CardColor { get; set; } = Color.FromArgb(38, 40, 48);
 
+        // Cor da borda hairline (calculada a partir da cor do card, um degrau mais clara)
+        public Color BorderColor { get; set; } = Color.Empty;
+
         protected override void OnPaint(PaintEventArgs e)
         {
-            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-            using var path = Gfx.RoundedRect(ClientRectangle, Radius);
-            using var brush = new SolidBrush(CardColor);
-            e.Graphics.FillPath(brush, path);
+            var g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            var rect = ClientRectangle;
+
+            // Fundo com gradiente vertical MUITO sutil (topo levemente mais claro) = volume/profundidade
+            using (var path = Gfx.RoundedRect(rect, Radius))
+            using (var brush = new LinearGradientBrush(
+                new Point(0, rect.Top), new Point(0, rect.Bottom + 1),
+                Gfx.Shift(CardColor, 8), Gfx.Shift(CardColor, -6)))
+            {
+                g.FillPath(brush, path);
+            }
+
+            // Borda hairline de 1px por dentro = separa a camada de conteudo do fundo
+            var borda = BorderColor == Color.Empty ? Gfx.Shift(CardColor, 26) : BorderColor;
+            using var bpath = Gfx.RoundedRect(new Rectangle(rect.X, rect.Y, rect.Width - 1, rect.Height - 1), Radius);
+            using var pen = new Pen(borda, 1f);
+            g.DrawPath(pen, bpath);
         }
 
         protected override void OnPaintBackground(PaintEventArgs e)
@@ -1699,9 +1725,12 @@ namespace MacroSupremes
         private static readonly Color ACCENT_RED = Color.FromArgb(255, 69, 58);
         private static readonly Color ACCENT_BLUE = Color.FromArgb(88, 101, 242);
         private static readonly Color ACCENT_YELLOW = Color.FromArgb(255, 214, 10);
+        // Acento PRIMARIO / identidade (dourado WYD). Verde/vermelho/amarelo = so estado.
+        private static readonly Color ACCENT_GOLD = Color.FromArgb(212, 175, 55);
         private static readonly Color TEXT_PRIMARY = Color.FromArgb(240, 240, 245);
-        private static readonly Color TEXT_SECONDARY = Color.FromArgb(142, 142, 147);
-        private static readonly Color TEXT_DIM = Color.FromArgb(90, 90, 100);
+        // Contraste melhorado (WCAG AA) — antes 142/90 ficavam quase ilegiveis no fundo escuro.
+        private static readonly Color TEXT_SECONDARY = Color.FromArgb(176, 178, 188);
+        private static readonly Color TEXT_DIM = Color.FromArgb(138, 140, 150);
 
         private static readonly string AppDataDir = Canal.DirDados;
         private static readonly string MacrosPath = Path.Combine(AppDataDir, "macros.json");
@@ -1907,8 +1936,8 @@ namespace MacroSupremes
                 Text = "\u2694 MACROS",
                 Location = new Point(8, 5),
                 Size = new Size(90, 32),
-                BaseColor = ACCENT_GREEN,
-                HoverColor = Color.FromArgb(90, 230, 115),
+                BaseColor = ACCENT_GOLD,
+                HoverColor = Color.FromArgb(226, 190, 78),
                 ForeColor = Color.FromArgb(10, 10, 10),
                 Radius = 6
             };
@@ -2065,21 +2094,24 @@ namespace MacroSupremes
             Controls.Add(pnlStatusBar);
 
             // Indicador de status (bolinha colorida + texto)
-            var pnlDot = new Panel { Location = new Point(16, 14), Size = new Size(10, 10) };
+            var pnlDot = new Panel { Location = new Point(16, 11), Size = new Size(16, 16) };
             pnlDot.Paint += (s, e) =>
             {
                 e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
                 Color dotColor = reproduzindo ? ACCENT_RED : gravando ? ACCENT_YELLOW : ACCENT_GREEN;
+                // Halo suave em volta (leitura mais facil, inclusive p/ daltonico) + dot maior
+                using (var halo = new SolidBrush(Color.FromArgb(55, dotColor)))
+                    e.Graphics.FillEllipse(halo, 0, 0, 15, 15);
                 using var brush = new SolidBrush(dotColor);
-                e.Graphics.FillEllipse(brush, 0, 0, 9, 9);
+                e.Graphics.FillEllipse(brush, 3, 3, 9, 9);
             };
             pnlStatusBar.Controls.Add(pnlDot);
 
             lblStatus = new Label
             {
                 Text = "Pronto",
-                Location = new Point(32, 10),
-                Size = new Size(240, 20),
+                Location = new Point(38, 10),
+                Size = new Size(236, 20),
                 ForeColor = ACCENT_GREEN,
                 Font = new Font("Segoe UI", 9, FontStyle.Bold),
                 Tag = pnlDot // guardar referencia pra repintar o dot
@@ -2134,8 +2166,9 @@ namespace MacroSupremes
                 Text = "Discord",
                 Location = new Point(16, 8),
                 Size = new Size(90, 28),
-                BaseColor = ACCENT_BLUE,
-                HoverColor = Color.FromArgb(105, 118, 255),
+                BaseColor = Color.FromArgb(34, 36, 46),
+                HoverColor = Color.FromArgb(46, 48, 60),
+                ForeColor = TEXT_SECONDARY,
                 Radius = 6,
                 Font = new Font("Segoe UI", 8, FontStyle.Bold)
             };
@@ -2154,8 +2187,9 @@ namespace MacroSupremes
                 Text = "Droplist",
                 Location = new Point(112, 8),
                 Size = new Size(90, 28),
-                BaseColor = Color.FromArgb(140, 90, 20),
-                HoverColor = Color.FromArgb(170, 110, 30),
+                BaseColor = Color.FromArgb(34, 36, 46),
+                HoverColor = Color.FromArgb(46, 48, 60),
+                ForeColor = TEXT_SECONDARY,
                 Radius = 6,
                 Font = new Font("Segoe UI", 8, FontStyle.Bold)
             };
@@ -2168,8 +2202,9 @@ namespace MacroSupremes
                 Text = "Updates WYD",
                 Location = new Point(208, 8),
                 Size = new Size(110, 28),
-                BaseColor = Color.FromArgb(50, 100, 50),
-                HoverColor = Color.FromArgb(60, 125, 60),
+                BaseColor = Color.FromArgb(34, 36, 46),
+                HoverColor = Color.FromArgb(46, 48, 60),
+                ForeColor = TEXT_SECONDARY,
                 Radius = 6,
                 Font = new Font("Segoe UI", 8, FontStyle.Bold)
             };
@@ -3452,7 +3487,7 @@ namespace MacroSupremes
             foreach (var (btn, id) in new[] { (btnTabMacros, "macros"), (btnTabTutorial, "tutorial"), (btnTabConfig, "config"), (btnTabAntiDC, "antidc") })
             {
                 bool ativo = aba == id;
-                btn.BaseColor = ativo ? ACCENT_GREEN : Color.FromArgb(45, 47, 55);
+                btn.BaseColor = ativo ? ACCENT_GOLD : Color.FromArgb(45, 47, 55);
                 btn.ForeColor = ativo ? Color.FromArgb(10, 10, 10) : TEXT_PRIMARY;
                 btn.Invalidate();
             }
