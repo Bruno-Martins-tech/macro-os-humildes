@@ -82,6 +82,28 @@ async function handleHeartbeat(request, env) {
   return json({ ok: true });
 }
 
+// Relatorio de desconexoes (Anti-DC). Guarda o MAX do dia por maquina.
+async function handleDcReport(request, env) {
+  const b = await readJson(request);
+  const machine = String(b.machine || '').slice(0, 128);
+  if (!machine) return json({ ok: false, error: 'machine ausente' }, 400);
+  const dc = Math.max(0, parseInt(b.dcCount) || 0);
+  const spike = Math.max(0, parseInt(b.spikeCount) || 0);
+  const ping = b.pingMedio == null ? null : (parseInt(b.pingMedio) || 0);
+  const wyd = b.wydAbertos == null ? null : (parseInt(b.wydAbertos) || 0);
+
+  await env.DB.prepare(
+    `INSERT INTO dc_reports (day, machine, dc_count, spike_count, ping_medio, wyd_abertos, updated_at)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+     ON CONFLICT(day, machine) DO UPDATE SET
+       dc_count = MAX(dc_count, ?3),
+       spike_count = MAX(spike_count, ?4),
+       ping_medio = ?5, wyd_abertos = ?6, updated_at = ?7`
+  ).bind(today(), machine, dc, spike, ping, wyd, nowIso()).run();
+
+  return json({ ok: true });
+}
+
 // ---------------------------------------------------------------------------
 // LICENCA
 // ---------------------------------------------------------------------------
@@ -159,6 +181,19 @@ async function handleAdminStats(env) {
        (SELECT COUNT(*) FROM heartbeats WHERE day = date('now')) AS ativos_hoje`
   ).first();
   return json({ ok: true, totais, dau: dau.results, versoes: versoes.results });
+}
+
+async function handleAdminDc(env) {
+  const r = await env.DB.prepare(
+    `SELECT d.day, d.machine, d.dc_count, d.spike_count, d.ping_medio, d.wyd_abertos, d.updated_at,
+            a.phone, a.nome
+     FROM dc_reports d
+     LEFT JOIN accounts a ON a.machine = d.machine
+     WHERE d.day >= date('now', '-7 days')
+     ORDER BY d.day DESC, d.dc_count DESC, d.spike_count DESC
+     LIMIT 300`
+  ).all();
+  return json({ ok: true, dcs: r.results });
 }
 
 async function handleAdminAccounts(env) {
@@ -245,6 +280,7 @@ export default {
         return new Response(ADMIN_HTML, { headers: { 'content-type': 'text/html; charset=utf-8' } });
 
       if (p === '/heartbeat' && m === 'POST') return await handleHeartbeat(request, env);
+      if (p === '/dc-report' && m === 'POST') return await handleDcReport(request, env);
       if (p === '/license/register' && m === 'POST') return await handleRegister(request, env);
       if (p === '/license/validate' && m === 'POST') return await handleValidate(request, env);
 
@@ -252,6 +288,7 @@ export default {
         if (!isAdmin(request, env)) return json({ ok: false, reason: 'nao_autorizado' }, 401);
         if (p === '/admin/stats' && m === 'GET') return await handleAdminStats(env);
         if (p === '/admin/accounts' && m === 'GET') return await handleAdminAccounts(env);
+        if (p === '/admin/dc' && m === 'GET') return await handleAdminDc(env);
         if (p === '/admin/revoke' && m === 'POST') return await handleAdminRevoke(request, env);
         if (p === '/admin/reset-machine' && m === 'POST') return await handleAdminResetMachine(request, env);
         if (p === '/admin/check-patch' && m === 'POST') { await checarPatchWyd(env); return json({ ok: true, checked: true }); }
@@ -309,6 +346,8 @@ const ADMIN_HTML = `<!doctype html>
   </div>
   <div id="msg"></div>
   <div class="cards" id="cards"></div>
+  <h2>Desconexões (DCs) — últimos 7 dias</h2>
+  <div id="dcs"></div>
   <h2>Contas cadastradas</h2>
   <div id="accs"></div>
   <h2>Ativos por dia (14 dias)</h2>
@@ -339,6 +378,8 @@ const ADMIN_HTML = `<!doctype html>
         card(t.contas_ativas,'Contas ativas')+card(t.contas_revogadas,'Revogadas');
       document.getElementById('dau').innerHTML = tabela(['Dia','Ativos'], (s.dau||[]).map(function(d){return [d.day, d.ativos];}));
       document.getElementById('vers').innerHTML = tabela(['Versao','Canal','Aparelhos'], (s.versoes||[]).map(function(v){return [v.version||'-', v.channel||'-', v.n];}));
+      var dcs = await api('/admin/dc');
+      renderDcs(dcs.dcs||[]);
       var a = await api('/admin/accounts');
       renderAccs(a.accounts||[]);
       msg('');
@@ -350,6 +391,17 @@ const ADMIN_HTML = `<!doctype html>
     var h='<table><tr>'+cols.map(function(c){return '<th>'+c+'</th>';}).join('')+'</tr>';
     h+=rows.map(function(r){return '<tr>'+r.map(function(c){return '<td>'+esc(c)+'</td>';}).join('')+'</tr>';}).join('');
     return h+'</table>';
+  }
+  function renderDcs(list){
+    if(!list.length){ document.getElementById('dcs').innerHTML='<div class="mut" style="padding:10px">Nenhum relatorio de DC ainda.</div>'; return; }
+    var h='<table><tr><th>Usuario</th><th>DCs</th><th>Picos</th><th>Ping medio</th><th>WYDs</th><th>Dia</th></tr>';
+    h+=list.map(function(d){
+      var quem = d.phone ? esc(d.phone)+(d.nome?' ('+esc(d.nome)+')':'') : '<span class="mut">'+esc(String(d.machine).slice(0,10))+'...</span>';
+      var dcCol = d.dc_count>0 ? '<span class="tag r">'+d.dc_count+'</span>' : '<span class="tag a">0</span>';
+      var ping = d.ping_medio==null?'-':(d.ping_medio+'ms');
+      return '<tr><td>'+quem+'</td><td>'+dcCol+'</td><td>'+esc(d.spike_count)+'</td><td class="mut">'+ping+'</td><td class="mut">'+esc(d.wyd_abertos==null?'-':d.wyd_abertos)+'</td><td class="mut">'+esc(d.day)+'</td></tr>';
+    }).join('');
+    document.getElementById('dcs').innerHTML = h+'</table>';
   }
   function renderAccs(list){
     if(!list.length){ document.getElementById('accs').innerHTML='<div class="mut" style="padding:10px">Ninguem cadastrado ainda.</div>'; return; }

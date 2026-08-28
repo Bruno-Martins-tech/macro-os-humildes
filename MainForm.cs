@@ -205,6 +205,26 @@ namespace MacroSupremes
             catch { /* offline/erro: telemetria e best-effort, ignora */ }
         }
 
+        // Relatorio de desconexoes (Anti-DC) — anonimo, atrelado a maquina. Best-effort.
+        public static async Task EnviarDcReportAsync(int dc, int spike, int pingMedio, int wyd)
+        {
+            try
+            {
+                var payload = JsonSerializer.Serialize(new
+                {
+                    machine = MaquinaId.Hash(),
+                    dcCount = dc,
+                    spikeCount = spike,
+                    pingMedio,
+                    wydAbertos = wyd,
+                });
+                using var content = new StringContent(payload, System.Text.Encoding.UTF8, "application/json");
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+                await http.PostAsync(BaseUrl + "/dc-report", content, cts.Token);
+            }
+            catch { }
+        }
+
         // POST de licenca (register/validate). Devolve (ok, motivo). "sem_conexao" = servidor fora do ar.
         public static async Task<(bool ok, string reason)> PostLicencaAsync(string rota, string phone, string senha)
         {
@@ -1810,6 +1830,7 @@ namespace MacroSupremes
         private Label lblOptCount = null!;
         private Label lblWydStatus = null!;
         private System.Windows.Forms.Timer pingTimer = null!;
+        private int dcReportTicks; // throttle do envio de relatorio de DC (tick de 3s)
         private Label lblTempoOnline = null!;
         private Label lblDcCount = null!;
         private Label lblSpikeCount = null!;
@@ -3429,6 +3450,11 @@ namespace MacroSupremes
                 // Vigia: reaplica prioridade/afinidade em WYD que abriram depois (roda sempre).
                 // Uma unica enumeracao de processos ja devolve os status usados na UI abaixo.
                 var (wydTotal, prioAplicados, cpuAplicados) = AntiDC.ReaplicarEObterStatus();
+
+                // Relatorio de DC pro painel admin: 1 envio ~60s apos abrir e depois a cada ~5min.
+                dcReportTicks++;
+                if (dcReportTicks % 100 == 20)
+                    _ = Backend.EnviarDcReportAsync(AntiDC.DcCount, AntiDC.SpikeCount, AntiDC.PingMedio(), wydTotal);
 
                 // Update UI only when visible
                 if (pnlAntiDC.Visible)

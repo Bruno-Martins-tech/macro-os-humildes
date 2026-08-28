@@ -37,6 +37,19 @@ CREATE TABLE IF NOT EXISTS heartbeats (
   PRIMARY KEY (day, machine)
 );
 
+-- Relatorios de desconexao (Anti-DC) por maquina/dia. Guarda o MAX do dia
+-- (resiliente a restart do app, que zera os contadores da sessao).
+CREATE TABLE IF NOT EXISTS dc_reports (
+  day         TEXT NOT NULL,
+  machine     TEXT NOT NULL,
+  dc_count    INTEGER NOT NULL DEFAULT 0,
+  spike_count INTEGER NOT NULL DEFAULT 0,
+  ping_medio  INTEGER,
+  wyd_abertos INTEGER,
+  updated_at  TEXT NOT NULL,
+  PRIMARY KEY (day, machine)
+);
+
 -- Estado do vigia de patch do WYD (o cron guarda a ultima assinatura vista).
 CREATE TABLE IF NOT EXISTS wyd_patch_state (
   id             INTEGER PRIMARY KEY CHECK (id = 1),
