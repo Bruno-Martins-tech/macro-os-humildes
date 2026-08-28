@@ -1737,6 +1737,7 @@ namespace MacroSupremes
         private NumericUpDown nudIntervalo = null!;
         private NumericUpDown nudAtraso = null!;
         private Label lblAcoes = null!;
+        private Label lblParamTitulo = null!;
         private Label lblStatus = null!;
         private Panel pnlStatusBar = null!;
         private ModernButton btnGravar = null!;
@@ -1744,10 +1745,6 @@ namespace MacroSupremes
         private ModernButton btnTestar = null!;
         private ModernButton btnPararReproducao = null!;
         private Label lblEstadoGravacao = null!;
-
-        // Velocidade
-        private TrackBar trkVelocidade = null!;
-        private Label lblVelocidadeValor = null!;
 
         // Abas
         private ModernButton btnTabMacros = null!;
@@ -1864,14 +1861,6 @@ namespace MacroSupremes
                     Color.FromArgb(12, 14, 28), Color.FromArgb(24, 18, 36));
                 g.FillRectangle(gradBrush, pnlHeader.ClientRectangle);
 
-                // Nome da guild estilizado no fundo (sutil, espalhado)
-                using var fontBg = new Font("Segoe UI", 28, FontStyle.Bold | FontStyle.Italic);
-                using var brushBg = new SolidBrush(Color.FromArgb(14, 212, 175, 55));
-                g.DrawString("S U P R E M U S", fontBg, brushBg, 60, 55);
-                using var fontBg2 = new Font("Segoe UI", 14, FontStyle.Bold);
-                using var brushBg2 = new SolidBrush(Color.FromArgb(10, 212, 175, 55));
-                g.DrawString("SUPREMUS  \u2022  SUPREMUS  \u2022  SUPREMUS", fontBg2, brushBg2, 20, 38);
-
                 // Linha de acento dourada embaixo (referencia ao ouro WYD)
                 using var goldPen = new Pen(Color.FromArgb(80, 212, 175, 55), 2);
                 g.DrawLine(goldPen, 0, pnlHeader.Height - 1, pnlHeader.Width, pnlHeader.Height - 1);
@@ -1893,21 +1882,15 @@ namespace MacroSupremes
                 using var brushTitle = new SolidBrush(TEXT_PRIMARY);
                 g.DrawString("MACRO \u2022 SUPREMES", fontTitulo, brushTitle, textX, by + 4);
 
-                // Subtitulo com referencia WYD
-                using var fontSub = new Font("Segoe UI", 8.5f);
+                // Subtitulo (uma linha so, enxuto)
+                using var fontSub = new Font("Segoe UI", 9);
                 using var brushSub = new SolidBrush(Color.FromArgb(212, 175, 55));
-                g.DrawString("With Your Destiny \u2022 Guilda Supremes \u2022 Server 3", fontSub, brushSub, textX + 2, by + 30);
+                g.DrawString("Guilda Supremes \u2022 WYD Server 3", fontSub, brushSub, textX + 2, by + 34);
 
-                // Citacao nordica
-                using var fontCit = new Font("Segoe UI", 7.5f, FontStyle.Italic);
-                using var brushCit = new SolidBrush(Color.FromArgb(80, 180, 180, 200));
-                g.DrawString("\"Os deuses favorecem os Supremes\"", fontCit,
-                    brushCit, textX + 2, by + 48);
-
-                // Versao
-                using var fontVer = new Font("Segoe UI", 7);
+                // Versao (canto superior direito)
+                using var fontVer = new Font("Segoe UI", 7.5f);
                 using var brushVer = new SolidBrush(TEXT_DIM);
-                g.DrawString($"v{AutoUpdater.VersaoAtual}", fontVer, brushVer, pnlHeader.Width - 50, 8);
+                g.DrawString($"v{AutoUpdater.VersaoAtual}{Canal.SufixoTitulo}", fontVer, brushVer, pnlHeader.Width - 90, 8);
             };
             Controls.Add(pnlHeader);
 
@@ -2092,12 +2075,50 @@ namespace MacroSupremes
             {
                 Text = "Pronto",
                 Location = new Point(32, 10),
-                Size = new Size(400, 20),
+                Size = new Size(300, 20),
                 ForeColor = ACCENT_GREEN,
                 Font = new Font("Segoe UI", 9, FontStyle.Bold),
                 Tag = pnlDot // guardar referencia pra repintar o dot
             };
             pnlStatusBar.Controls.Add(lblStatus);
+
+            // Botao FIXO do Hack de login (sempre visivel; estado ON/OFF bem claro,
+            // porque ele mexe no proxy do sistema e nao pode ficar ligado sem querer).
+            bool hackAtivo = ProxyHack.IsAtivo();
+            var btnHackFixo = new ModernButton
+            {
+                Text = hackAtivo ? "⚡ Hack de login: ATIVO" : "⚡ Hack de login: desligado",
+                Location = new Point(360, 6),
+                Size = new Size(244, 28),
+                BaseColor = hackAtivo ? Color.FromArgb(40, 140, 40) : Color.FromArgb(52, 44, 30),
+                HoverColor = hackAtivo ? Color.FromArgb(50, 170, 50) : Color.FromArgb(70, 58, 38),
+                AccentColor = hackAtivo ? ACCENT_GREEN : Color.FromArgb(150, 90, 30),
+                Radius = 6,
+                Font = new Font("Segoe UI", 8.5f, FontStyle.Bold)
+            };
+            btnHackFixo.Click += (s, e) =>
+            {
+                if (ProxyHack.IsAtivo())
+                {
+                    ProxyHack.Desativar();
+                    btnHackFixo.Text = "⚡ Hack de login: desligado";
+                    btnHackFixo.BaseColor = Color.FromArgb(52, 44, 30);
+                    btnHackFixo.HoverColor = Color.FromArgb(70, 58, 38);
+                    btnHackFixo.AccentColor = Color.FromArgb(150, 90, 30);
+                    AtualizarStatus("Proxy desligado. Conexao normal.", ACCENT_GREEN);
+                }
+                else
+                {
+                    ProxyHack.Ativar();
+                    btnHackFixo.Text = "⚡ Hack de login: ATIVO";
+                    btnHackFixo.BaseColor = Color.FromArgb(40, 140, 40);
+                    btnHackFixo.HoverColor = Color.FromArgb(50, 170, 50);
+                    btnHackFixo.AccentColor = ACCENT_GREEN;
+                    AtualizarStatus("Proxy ativado! Logue no WYD e depois desligue aqui.", ACCENT_YELLOW);
+                }
+                btnHackFixo.Invalidate();
+            };
+            pnlStatusBar.Controls.Add(btnHackFixo);
 
             // --- RODAPE ---
             var pnlRodape = new Panel { Location = new Point(0, 650), Size = new Size(620, 70), BackColor = Color.FromArgb(16, 16, 22) };
@@ -2262,25 +2283,26 @@ namespace MacroSupremes
             };
             cardLista.Controls.Add(lblDica);
 
-            // Card direito — Configuracoes
+            // Card direito (topo) — Parametros do macro selecionado
             var cardConfig = new CardPanel
             {
                 Location = new Point(260, 10),
-                Size = new Size(344, 266),
+                Size = new Size(344, 176),
                 CardColor = BG_CARD
             };
             pnlMacros.Controls.Add(cardConfig);
 
-            var lblTitConfig = new Label
+            lblParamTitulo = new Label
             {
-                Text = "CONFIGURACOES",
+                Text = "PARAMETROS DO MACRO",
                 Location = new Point(16, 14),
-                AutoSize = true,
+                Size = new Size(312, 18),
                 ForeColor = TEXT_SECONDARY,
                 Font = new Font("Segoe UI", 8, FontStyle.Bold),
-                BackColor = Color.Transparent
+                BackColor = Color.Transparent,
+                AutoEllipsis = true
             };
-            cardConfig.Controls.Add(lblTitConfig);
+            cardConfig.Controls.Add(lblParamTitulo);
 
             // Campos
             int lx = 16, rx = 190, y = 42, gap = 38;
@@ -2319,62 +2341,21 @@ namespace MacroSupremes
             nudAtraso.ValueChanged += CampoAlterado;
             cardConfig.Controls.Add(nudAtraso);
 
-            y += gap;
-            AddLabel(cardConfig, "Velocidade", lx, y);
-            trkVelocidade = new TrackBar
-            {
-                Location = new Point(rx - 10, y - 6),
-                Size = new Size(120, 30),
-                Minimum = 1,
-                Maximum = 10,
-                Value = Math.Clamp((int)(biblioteca.Config.Velocidade * 2), 1, 10),
-                TickFrequency = 1,
-                SmallChange = 1,
-                LargeChange = 1,
-                BackColor = BG_CARD
-            };
-            lblVelocidadeValor = new Label
-            {
-                Text = $"{biblioteca.Config.Velocidade:0.0}x",
-                Location = new Point(rx + 115, y),
-                AutoSize = true,
-                ForeColor = ACCENT_YELLOW,
-                Font = new Font("Segoe UI", 9, FontStyle.Bold),
-                BackColor = Color.Transparent
-            };
-            trkVelocidade.ValueChanged += (s, ev) =>
-            {
-                double vel = trkVelocidade.Value / 2.0;
-                biblioteca.Config.Velocidade = vel;
-                lblVelocidadeValor.Text = $"{vel:0.0}x";
-            };
-            cardConfig.Controls.Add(trkVelocidade);
-            cardConfig.Controls.Add(lblVelocidadeValor);
+            // Velocidade fica na aba CONFIG (é global, vale pra todos os macros) — nao mais aqui.
+            // A contagem de acoes gravadas foi pro card GRAVACAO, junto de quem grava.
 
-            y += gap + 4;
-            lblAcoes = new Label
-            {
-                Text = "0 acoes gravadas",
-                Location = new Point(lx, y),
-                AutoSize = true,
-                ForeColor = ACCENT_GREEN,
-                Font = new Font("Segoe UI", 9, FontStyle.Bold),
-                BackColor = Color.Transparent
-            };
-            cardConfig.Controls.Add(lblAcoes);
-
-            // Card de acoes (gravar/testar)
+            // Card direito (baixo) — Gravacao e reproducao
             var cardAcoes = new CardPanel
             {
-                Location = new Point(260, 286),
-                Size = new Size(344, 172),
+                Location = new Point(260, 192),
+                Size = new Size(344, 210),
                 CardColor = BG_CARD
             };
             pnlMacros.Controls.Add(cardAcoes);
 
             var lblTitAcoes = new Label
             {
-                Text = "ACOES",
+                Text = "GRAVACAO",
                 Location = new Point(16, 14),
                 AutoSize = true,
                 ForeColor = TEXT_SECONDARY,
@@ -2383,10 +2364,21 @@ namespace MacroSupremes
             };
             cardAcoes.Controls.Add(lblTitAcoes);
 
+            lblAcoes = new Label
+            {
+                Text = "0 acoes gravadas",
+                Location = new Point(16, 36),
+                AutoSize = true,
+                ForeColor = ACCENT_GREEN,
+                Font = new Font("Segoe UI", 9, FontStyle.Bold),
+                BackColor = Color.Transparent
+            };
+            cardAcoes.Controls.Add(lblAcoes);
+
             btnGravar = new ModernButton
             {
                 Text = $"\u25CF  Gravar ({biblioteca.Config.HotkeyGravar})",
-                Location = new Point(16, 42),
+                Location = new Point(16, 62),
                 Size = new Size(145, 34),
                 BaseColor = Color.FromArgb(180, 40, 40),
                 HoverColor = Color.FromArgb(210, 50, 50),
@@ -2399,7 +2391,7 @@ namespace MacroSupremes
             btnPararGravacao = new ModernButton
             {
                 Text = "\u25A0  Parar (ESC)",
-                Location = new Point(170, 42),
+                Location = new Point(170, 62),
                 Size = new Size(155, 34),
                 Enabled = false,
                 Radius = 8
@@ -2410,7 +2402,7 @@ namespace MacroSupremes
             btnTestar = new ModernButton
             {
                 Text = "\u25B6  Testar",
-                Location = new Point(16, 84),
+                Location = new Point(16, 104),
                 Size = new Size(145, 34),
                 BaseColor = Color.FromArgb(40, 130, 50),
                 HoverColor = Color.FromArgb(50, 155, 60),
@@ -2423,7 +2415,7 @@ namespace MacroSupremes
             btnPararReproducao = new ModernButton
             {
                 Text = $"\u25A0  Parar ({biblioteca.Config.HotkeyPanico})",
-                Location = new Point(170, 84),
+                Location = new Point(170, 104),
                 Size = new Size(155, 34),
                 Enabled = false,
                 Radius = 8
@@ -2435,7 +2427,7 @@ namespace MacroSupremes
             lblEstadoGravacao = new Label
             {
                 Text = "",
-                Location = new Point(16, 122),
+                Location = new Point(16, 142),
                 Size = new Size(310, 22),
                 ForeColor = ACCENT_GREEN,
                 Font = new Font("Segoe UI", 9, FontStyle.Bold),
@@ -2448,7 +2440,7 @@ namespace MacroSupremes
             var btnSalvarMacro = new ModernButton
             {
                 Text = "\u2714  Salvar",
-                Location = new Point(16, 144),
+                Location = new Point(16, 168),
                 Size = new Size(110, 28),
                 BaseColor = Color.FromArgb(30, 90, 150),
                 HoverColor = Color.FromArgb(40, 110, 180),
@@ -2465,7 +2457,7 @@ namespace MacroSupremes
             var btnLimpar = new ModernButton
             {
                 Text = "\u2716  Limpar",
-                Location = new Point(134, 144),
+                Location = new Point(134, 168),
                 Size = new Size(110, 28),
                 BaseColor = Color.FromArgb(100, 40, 40),
                 HoverColor = Color.FromArgb(130, 50, 50),
@@ -2484,11 +2476,11 @@ namespace MacroSupremes
             };
             cardAcoes.Controls.Add(btnLimpar);
 
-            // Card atalhos rapidos
+            // Card atalhos rapidos (rodape da tela)
             var cardAtalhos = new CardPanel
             {
-                Location = new Point(16, 390),
-                Size = new Size(588, 68),
+                Location = new Point(16, 410),
+                Size = new Size(588, 48),
                 CardColor = Color.FromArgb(24, 26, 34)
             };
             pnlMacros.Controls.Add(cardAtalhos);
@@ -2496,7 +2488,7 @@ namespace MacroSupremes
             var lblAtalhos = new Label
             {
                 Text = "ATALHOS GLOBAIS",
-                Location = new Point(16, 10),
+                Location = new Point(16, 8),
                 AutoSize = true,
                 ForeColor = TEXT_DIM,
                 Font = new Font("Segoe UI", 7, FontStyle.Bold),
@@ -2507,8 +2499,8 @@ namespace MacroSupremes
             var lblAtalhosInfo = new Label
             {
                 Text = $"F5-F8  macro   {biblioteca.Config.HotkeyGravar}  gravar   {biblioteca.Config.HotkeyPanico}  parar tudo",
-                Location = new Point(16, 32),
-                Size = new Size(500, 20),
+                Location = new Point(16, 26),
+                Size = new Size(500, 18),
                 ForeColor = TEXT_SECONDARY,
                 Font = new Font("Consolas", 8.5f),
                 BackColor = Color.Transparent
@@ -2785,18 +2777,7 @@ namespace MacroSupremes
                 double vel = trkVelConfig.Value / 2.0;
                 biblioteca.Config.Velocidade = vel;
                 lblVelConfig.Text = $"{vel:0.0}x";
-                // Sincronizar com o slider da aba macros (sem loop: checa valor antes)
-                if (trkVelocidade.Value != trkVelConfig.Value)
-                {
-                    trkVelocidade.Value = trkVelConfig.Value;
-                    lblVelocidadeValor.Text = $"{vel:0.0}x";
-                }
-                SalvarBiblioteca();
-            };
-            // Sincronizar slider da aba macros com este (salva via trkVelConfig handler)
-            trkVelocidade.ValueChanged += (s, ev) =>
-            {
-                if (trkVelConfig.Value != trkVelocidade.Value) trkVelConfig.Value = trkVelocidade.Value;
+                SalvarBibliotecaDebounced();
             };
             cardVelocidade.Controls.Add(trkVelConfig);
             cardVelocidade.Controls.Add(lblVelConfig);
@@ -2813,72 +2794,7 @@ namespace MacroSupremes
             cardVelocidade.Controls.Add(lblVelLabels);
 
             // Card — Hack Login Server Full
-            var cardProxy = new CardPanel
-            {
-                Location = new Point(16, 370),
-                Size = new Size(588, 90),
-                CardColor = BG_CARD
-            };
-            pnlConfig.Controls.Add(cardProxy);
-
-            var lblTitProxy = new Label
-            {
-                Text = "LOGIN SERVER FULL",
-                Location = new Point(16, 14),
-                AutoSize = true,
-                ForeColor = TEXT_SECONDARY,
-                Font = new Font("Segoe UI", 8, FontStyle.Bold),
-                BackColor = Color.Transparent
-            };
-            cardProxy.Controls.Add(lblTitProxy);
-
-            var lblDescProxy = new Label
-            {
-                Text = "Ativa proxy gateway (0.0.0.4:80) para burlar fila de servidor lotado. Desative apos logar.",
-                Location = new Point(16, 36),
-                Size = new Size(400, 18),
-                ForeColor = TEXT_DIM,
-                Font = new Font("Segoe UI", 8),
-                BackColor = Color.Transparent
-            };
-            cardProxy.Controls.Add(lblDescProxy);
-
-            bool proxyAtivo = ProxyHack.IsAtivo();
-            var btnProxy = new ModernButton
-            {
-                Text = proxyAtivo ? "\u2714  HACK ATIVO" : "\u26A1  Ativar Hack Login",
-                Location = new Point(16, 58),
-                Size = new Size(200, 28),
-                BaseColor = proxyAtivo ? Color.FromArgb(40, 140, 40) : Color.FromArgb(140, 50, 20),
-                HoverColor = proxyAtivo ? Color.FromArgb(50, 170, 50) : Color.FromArgb(170, 60, 25),
-                AccentColor = proxyAtivo ? ACCENT_GREEN : ACCENT_RED,
-                Radius = 6,
-                Font = new Font("Segoe UI", 9, FontStyle.Bold)
-            };
-            btnProxy.Click += (s, ev) =>
-            {
-                bool ativo = ProxyHack.IsAtivo();
-                if (ativo)
-                {
-                    ProxyHack.Desativar();
-                    btnProxy.Text = "\u26A1  Ativar Hack Login";
-                    btnProxy.BaseColor = Color.FromArgb(140, 50, 20);
-                    btnProxy.HoverColor = Color.FromArgb(170, 60, 25);
-                    btnProxy.AccentColor = ACCENT_RED;
-                    AtualizarStatus("Proxy desativado. Conexao normal.", ACCENT_GREEN);
-                }
-                else
-                {
-                    ProxyHack.Ativar();
-                    btnProxy.Text = "\u2714  HACK ATIVO";
-                    btnProxy.BaseColor = Color.FromArgb(40, 140, 40);
-                    btnProxy.HoverColor = Color.FromArgb(50, 170, 50);
-                    btnProxy.AccentColor = ACCENT_GREEN;
-                    AtualizarStatus("Proxy ativado! Logue no WYD e depois desative.", ACCENT_YELLOW);
-                }
-                btnProxy.Invalidate();
-            };
-            cardProxy.Controls.Add(btnProxy);
+            // O "Hack de login" saiu daqui: virou botao FIXO na barra de status (sempre visivel).
         }
 
         private void CriarPaginaAntiDC()
@@ -3639,6 +3555,7 @@ namespace MacroSupremes
             nudIntervalo.Value = Math.Clamp(macroSelecionado.IntervaloMs, (int)nudIntervalo.Minimum, (int)nudIntervalo.Maximum);
             nudAtraso.Value = Math.Clamp(macroSelecionado.AtrasoInicialMs, (int)nudAtraso.Minimum, (int)nudAtraso.Maximum);
             lblAcoes.Text = $"{macroSelecionado.Eventos.Count} acoes gravadas";
+            lblParamTitulo.Text = "MACRO: " + macroSelecionado.Name.ToUpperInvariant();
 
             carregandoCampos = false;
         }
