@@ -227,6 +227,8 @@ O app atualiza sozinho via GitHub Releases. Nao precisa mandar zip de novo.
 | 1.6.0 | Feedback de gravacao, botao salvar macro, botao limpar gravacao |
 | 1.7.0 | Aba Config com atalhos personalizaveis e velocidade |
 | 1.8.0 | Rebrand Supremes, brasao da guild, hack login server full, fix restart |
+| 1.9.0-1.11.0 | Anti-DC (rede/CPU + monitor de ping), fix "fecha e nao reabre", release seguro |
+| 1.12.0 | Backend Cloudflare (telemetria + licenca telefone/senha + painel admin com contas e DCs + alerta de patch no Discord); canal de staging; brasao embutido; nome corrigido p/ SUPREMUS; redesenho de UX (cards com profundidade, dourado, passos numerados, overlay 3-2-1, faixa REC, lista com status/atalho, tela de boas-vindas, tutorial reescrito); volume da musica; Wi-Fi Maximo corrigido (powercfg) |
 
 ---
 

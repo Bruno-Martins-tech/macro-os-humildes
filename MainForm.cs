@@ -274,7 +274,7 @@ namespace MacroSupremes
     {
         private const string GITHUB_USER = "Bruno-Martins-tech";
         private const string GITHUB_REPO = "macro-os-humildes";
-        private const string CURRENT_VERSION = "1.11.0";
+        private const string CURRENT_VERSION = "1.12.0";
         // Stable pega so o "latest" (exclui pre-release). Staging lista tudo e usa o mais recente (inclui pre-release).
         private static readonly string API_URL = Canal.EhStaging
             ? $"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/releases"
