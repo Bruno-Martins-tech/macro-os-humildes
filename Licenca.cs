@@ -103,7 +103,7 @@ namespace MacroSupremes
 
         public LoginForm()
         {
-            Text = "Acesso - Macro Supremes" + Canal.SufixoTitulo;
+            Text = "Acesso - Macro Supremus" + Canal.SufixoTitulo;
             ClientSize = new Size(380, 330);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
