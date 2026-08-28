@@ -920,11 +920,11 @@ namespace MacroSupremes
         {
             try
             {
-                string wydPath = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                    "wyd_launcher", "WYD Global");
-                string cmd = $"/c netsh advfirewall firewall add rule name=\"WYD Global\" dir=in action=allow program=\"{wydPath}\\WYD.exe\" enable=yes 2>nul & " +
-                             $"netsh advfirewall firewall add rule name=\"WYD Global Out\" dir=out action=allow program=\"{wydPath}\\WYD.exe\" enable=yes 2>nul";
+                string exeWyd = ExeWydDetectado();
+                if (string.IsNullOrEmpty(exeWyd))
+                    exeWyd = Path.Combine(PastaPadraoWyd(), "WYD.exe"); // ultimo recurso
+                string cmd = $"/c netsh advfirewall firewall add rule name=\"WYD Global\" dir=in action=allow program=\"{exeWyd}\" enable=yes 2>nul & " +
+                             $"netsh advfirewall firewall add rule name=\"WYD Global Out\" dir=out action=allow program=\"{exeWyd}\" enable=yes 2>nul";
                 var psi = new ProcessStartInfo("cmd.exe", cmd)
                 { UseShellExecute = false, CreateNoWindow = true };
                 using var p = Process.Start(psi); p?.WaitForExit(5000);
@@ -941,6 +941,43 @@ namespace MacroSupremes
                 using var p = Process.Start(psi); p?.WaitForExit(5000);
             }
             catch { }
+        }
+
+        // Pasta padrao do launcher (fallback quando o WYD nao esta aberto).
+        private static string PastaPadraoWyd() => Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "wyd_launcher", "WYD Global");
+
+        // Caminho do WYD.exe descoberto pelo PROCESSO em execucao (robusto a instalacao fora do padrao).
+        // Se o WYD nao estiver aberto, cai no local padrao do launcher. "" se nem isso existir.
+        public static string ExeWydDetectado()
+        {
+            var ps = ObterProcessosWyd();
+            try
+            {
+                foreach (var p in ps)
+                {
+                    try { var exe = p.MainModule?.FileName; if (!string.IsNullOrEmpty(exe)) return exe; }
+                    catch { }
+                }
+            }
+            finally { foreach (var p in ps) { try { p.Dispose(); } catch { } } }
+
+            string padrao = Path.Combine(PastaPadraoWyd(), "WYD.exe");
+            return File.Exists(padrao) ? padrao : "";
+        }
+
+        // login.mp3 do WYD, derivado da pasta do processo (ou do padrao). "" se nao achar.
+        public static string MusicaWydDetectada()
+        {
+            string exe = ExeWydDetectado();
+            string? dir = string.IsNullOrEmpty(exe) ? PastaPadraoWyd() : Path.GetDirectoryName(exe);
+            if (!string.IsNullOrEmpty(dir))
+            {
+                string mp3 = Path.Combine(dir, "music", "login.mp3");
+                if (File.Exists(mp3)) return mp3;
+            }
+            return "";
         }
 
         // --- Prioridade Alta ---
@@ -1734,11 +1771,6 @@ namespace MacroSupremes
 
         private bool carregandoCampos;
         private bool musicaMutada;
-
-        // Caminho da musica do WYD (login.mp3)
-        private static readonly string WYD_MUSIC_PATH = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "wyd_launcher", "WYD Global", "music", "login.mp3");
 
         // Runas nordicas para decoracao (referencia ao WYD)
         private const string RUNAS = "\u16A0\u16A2\u16A6\u16A8\u16B1\u16B7\u16C1\u16C7\u16D2\u16DE";
@@ -3418,9 +3450,11 @@ namespace MacroSupremes
 
         private void IniciarMusica()
         {
-            if (File.Exists(WYD_MUSIC_PATH))
+            // Descobre o login.mp3 pela pasta do WYD em execucao (robusto a instalacao fora do padrao).
+            string musica = AntiDC.MusicaWydDetectada();
+            if (!string.IsNullOrEmpty(musica))
             {
-                MciPlayer.Abrir(WYD_MUSIC_PATH);
+                MciPlayer.Abrir(musica);
                 MciPlayer.SetVolume(150); // volume baixinho (0-1000)
                 MciPlayer.Tocar(loop: true);
             }
