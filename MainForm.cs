@@ -1699,7 +1699,7 @@ namespace MacroSupremes
 
             // Texto centralizado
             using var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-            using var textBrush = new SolidBrush(Enabled ? ForeColor : Color.FromArgb(80, 80, 80));
+            using var textBrush = new SolidBrush(Enabled ? ForeColor : Color.FromArgb(124, 126, 134));
             g.DrawString(Text, Font, textBrush, new RectangleF(0, 0, Width, Height), sf);
         }
 
@@ -1785,10 +1785,16 @@ namespace MacroSupremes
         private string overlaySub = "";
         private Color overlayCor = Color.FromArgb(212, 175, 55);
 
+        // Sinal de REC (faixa vermelha no topo + titulo [REC]) enquanto grava
+        private Panel pnlRec = null!;
+        private string tituloBase = "";
+        private string abaAtiva = "macros"; // p/ o underline dourado da aba ativa
+
         // Abas
         private ModernButton btnTabMacros = null!;
         private ModernButton btnTabTutorial = null!;
         private ModernButton btnTabConfig = null!;
+        private Panel pnlTabs = null!;
         private Panel pnlMacros = null!;
         private Panel pnlTutorial = null!;
         private Panel pnlConfig = null!;
@@ -1841,6 +1847,7 @@ namespace MacroSupremes
         public MainForm()
         {
             Text = "MACRO \u2022 SUPREMES  \u2014  With Your Destiny" + Canal.SufixoTitulo;
+            tituloBase = Text;
             ClientSize = new Size(620, 720);
             FormBorderStyle = FormBorderStyle.FixedSingle;
             MaximizeBox = false;
@@ -1966,7 +1973,24 @@ namespace MacroSupremes
             Controls.Add(pnlHeader);
 
             // --- ABAS ---
-            var pnlTabs = new Panel { Location = new Point(0, 100), Size = new Size(620, 42), BackColor = Color.FromArgb(22, 24, 30) };
+            pnlTabs = new Panel { Location = new Point(0, 100), Size = new Size(620, 42), BackColor = Color.FromArgb(22, 24, 30) };
+            // Underline dourado sob a aba ativa (visual de "tab" moderno)
+            pnlTabs.Paint += (s, e) =>
+            {
+                ModernButton? ativo = abaAtiva switch
+                {
+                    "macros" => btnTabMacros,
+                    "tutorial" => btnTabTutorial,
+                    "config" => btnTabConfig,
+                    "antidc" => btnTabAntiDC,
+                    _ => null
+                };
+                if (ativo != null)
+                {
+                    using var br = new SolidBrush(ACCENT_GOLD);
+                    e.Graphics.FillRectangle(br, ativo.Left, pnlTabs.Height - 3, ativo.Width, 3);
+                }
+            };
             Controls.Add(pnlTabs);
 
             btnTabMacros = new ModernButton
@@ -2296,6 +2320,25 @@ namespace MacroSupremes
                 }
             };
             Controls.Add(pnlOverlay);
+
+            // Faixa vermelha de REC no topo (fina), visivel so enquanto grava
+            pnlRec = new Panel
+            {
+                Location = new Point(0, 0),
+                Size = new Size(620, 4),
+                BackColor = ACCENT_RED,
+                Visible = false
+            };
+            Controls.Add(pnlRec);
+        }
+
+        // Liga/desliga o sinal de REC (faixa vermelha + titulo). Roda na thread da UI.
+        private void SinalRec(bool on)
+        {
+            if (InvokeRequired) { BeginInvoke(() => SinalRec(on)); return; }
+            pnlRec.Visible = on;
+            if (on) pnlRec.BringToFront();
+            Text = on ? "● REC  —  gravando (ESC para parar)" : tituloBase;
         }
 
         private void MostrarOverlay(string txt, string sub, Color cor)
@@ -3586,10 +3629,13 @@ namespace MacroSupremes
             foreach (var (btn, id) in new[] { (btnTabMacros, "macros"), (btnTabTutorial, "tutorial"), (btnTabConfig, "config"), (btnTabAntiDC, "antidc") })
             {
                 bool ativo = aba == id;
-                btn.BaseColor = ativo ? ACCENT_GOLD : Color.FromArgb(45, 47, 55);
-                btn.ForeColor = ativo ? Color.FromArgb(10, 10, 10) : TEXT_PRIMARY;
+                // Aba ativa = "text tab" (funde com a barra) + texto dourado + underline; inativa = botao sutil
+                btn.BaseColor = ativo ? Color.FromArgb(22, 24, 30) : Color.FromArgb(45, 47, 55);
+                btn.ForeColor = ativo ? ACCENT_GOLD : TEXT_SECONDARY;
                 btn.Invalidate();
             }
+            abaAtiva = aba;
+            pnlTabs.Invalidate(); // redesenha o underline dourado
         }
 
         // ==================================================================
@@ -3911,6 +3957,7 @@ namespace MacroSupremes
             ultimoMoveT = -1;
             gravacaoStopwatch = Stopwatch.StartNew();
             AtualizarStatus("GRAVANDO...  (ESC para parar)", ACCENT_RED);
+            SinalRec(true);
 
             IntPtr hMod = Win32.GetModuleHandle(null!);
             mouseHookProc = MouseHookCallback;
@@ -3925,6 +3972,9 @@ namespace MacroSupremes
                 if (keyboardHookId != IntPtr.Zero) { Win32.UnhookWindowsHookEx(keyboardHookId); keyboardHookId = IntPtr.Zero; }
                 gravando = false;
                 gravacaoStopwatch?.Stop();
+                SinalRec(false);
+                btnGravar.Enabled = true;
+                btnPararGravacao.Enabled = false;
                 AtualizarStatus("Erro ao iniciar a gravacao (hook negado). Rode como admin e tente de novo.", ACCENT_RED);
             }
         }
@@ -3933,6 +3983,7 @@ namespace MacroSupremes
         {
             if (!gravando) return;
             gravando = false;
+            SinalRec(false);
 
             if (mouseHookId != IntPtr.Zero) { Win32.UnhookWindowsHookEx(mouseHookId); mouseHookId = IntPtr.Zero; }
             if (keyboardHookId != IntPtr.Zero) { Win32.UnhookWindowsHookEx(keyboardHookId); keyboardHookId = IntPtr.Zero; }
