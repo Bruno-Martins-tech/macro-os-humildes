@@ -7,6 +7,7 @@ using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
@@ -139,6 +140,62 @@ namespace MacroSupremes
         // Raiz de dados em %APPDATA%\<PastaApp>
         public static string DirDados => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), PastaApp);
+    }
+
+    // Identidade estavel e anonima do PC: hash do MachineGuid do Windows (nao reversivel).
+    // Usada na telemetria e pra amarrar a licenca a uma maquina.
+    internal static class MaquinaId
+    {
+        private static string? _cache;
+        public static string Hash()
+        {
+            if (_cache != null) return _cache;
+            string bruto = "";
+            try
+            {
+                using var k = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Cryptography");
+                bruto = k?.GetValue("MachineGuid") as string ?? "";
+            }
+            catch { }
+            if (string.IsNullOrEmpty(bruto))
+                bruto = Environment.MachineName + "|" + Environment.UserName; // fallback
+            using var sha = SHA256.Create();
+            var bytes = sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes("MacroSupremes|" + bruto));
+            _cache = Convert.ToHexString(bytes).ToLowerInvariant();
+            return _cache;
+        }
+    }
+
+    // Cliente do backend Cloudflare (telemetria + licenca). Best-effort: nunca trava/quebra o app.
+    internal static class Backend
+    {
+        public const string BaseUrl = "https://macro-supremes.bno-bmartins.workers.dev";
+
+        private static readonly HttpClient http = CriarHttp();
+        private static HttpClient CriarHttp()
+        {
+            var h = new HttpClient { Timeout = TimeSpan.FromSeconds(8) };
+            h.DefaultRequestHeaders.Add("User-Agent", "MacroSupremes-App");
+            return h;
+        }
+
+        // Sinal de vida anonimo ao abrir (fire-and-forget).
+        public static async Task EnviarHeartbeatAsync(string versao)
+        {
+            try
+            {
+                var payload = JsonSerializer.Serialize(new
+                {
+                    machine = MaquinaId.Hash(),
+                    version = versao,
+                    channel = Canal.EhStaging ? "staging" : "stable",
+                });
+                using var content = new StringContent(payload, System.Text.Encoding.UTF8, "application/json");
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+                await http.PostAsync(BaseUrl + "/heartbeat", content, cts.Token);
+            }
+            catch { /* offline/erro: telemetria e best-effort, ignora */ }
+        }
     }
 
     // ======================================================================
