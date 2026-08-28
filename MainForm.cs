@@ -889,43 +889,60 @@ namespace MacroSupremes
             catch { }
         }
 
-        // --- Wi-Fi Power Save ---
+        // --- Wi-Fi Power Save (via powercfg: "Modo de economia de energia do adaptador sem fio") ---
+        // Subgrupo "Wireless Adapter Settings" + config "Power Saving Mode". Valor 0 = Desempenho Maximo.
+        private const string PWR_SUBGRP = "19cbb8fa-5279-450e-9fac-8a3d5fedd0c1";
+        private const string PWR_SETTING = "12bbebe6-58d6-4636-95bb-3217ef867c1a";
+
+        // Ativo = tanto na tomada (AC) quanto na bateria (DC) em Desempenho Maximo (indice 0).
         public static bool IsWifiPowerSaveAtivo()
+        {
+            var (ac, dc) = LerWifiPowerIndices();
+            return ac == 0 && dc == 0;
+        }
+
+        // Le os indices AC/DC atuais. Independente de idioma: pega os dois "0x........" na ordem.
+        private static (int ac, int dc) LerWifiPowerIndices()
         {
             try
             {
-                var psi = new ProcessStartInfo("cmd.exe", "/c netsh wlan show settings")
+                var psi = new ProcessStartInfo("powercfg", $"/query SCHEME_CURRENT {PWR_SUBGRP} {PWR_SETTING}")
                 { RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true };
                 using var proc = Process.Start(psi);
-                if (proc == null) return false;
+                if (proc == null) return (-1, -1);
                 string output = proc.StandardOutput.ReadToEnd();
                 proc.WaitForExit(5000);
-                return output.Contains("power", StringComparison.OrdinalIgnoreCase) &&
-                       output.Contains("disabled", StringComparison.OrdinalIgnoreCase);
+                var ms = System.Text.RegularExpressions.Regex.Matches(output, "0x([0-9A-Fa-f]{8})");
+                int ac = ms.Count > 0 ? Convert.ToInt32(ms[0].Groups[1].Value, 16) : -1;
+                int dc = ms.Count > 1 ? Convert.ToInt32(ms[1].Groups[1].Value, 16) : -1;
+                return (ac, dc);
             }
-            catch { return false; }
+            catch { return (-1, -1); }
+        }
+
+        private static void RunPowercfg(string args)
+        {
+            try
+            {
+                var psi = new ProcessStartInfo("powercfg", args) { UseShellExecute = false, CreateNoWindow = true };
+                using var p = Process.Start(psi); p?.WaitForExit(5000);
+            }
+            catch { }
         }
 
         public static void AtivarWifiPowerSave()
         {
-            try
-            {
-                var psi = new ProcessStartInfo("cmd.exe", "/c netsh wlan set autoconfig enabled=no interface=\"Wi-Fi\" 2>nul & netsh int tcp set global autotuninglevel=disabled 2>nul")
-                { UseShellExecute = false, CreateNoWindow = true };
-                using var p = Process.Start(psi); p?.WaitForExit(5000);
-            }
-            catch { }
+            // Desempenho Maximo (0) na tomada E na bateria
+            RunPowercfg($"/setacvalueindex SCHEME_CURRENT {PWR_SUBGRP} {PWR_SETTING} 0");
+            RunPowercfg($"/setdcvalueindex SCHEME_CURRENT {PWR_SUBGRP} {PWR_SETTING} 0");
+            RunPowercfg("/setactive SCHEME_CURRENT");
         }
 
         public static void DesativarWifiPowerSave()
         {
-            try
-            {
-                var psi = new ProcessStartInfo("cmd.exe", "/c netsh wlan set autoconfig enabled=yes interface=\"Wi-Fi\" 2>nul & netsh int tcp set global autotuninglevel=normal 2>nul")
-                { UseShellExecute = false, CreateNoWindow = true };
-                using var p = Process.Start(psi); p?.WaitForExit(5000);
-            }
-            catch { }
+            // Volta a economia media (2) na bateria; AC fica no padrao (Desempenho Maximo)
+            RunPowercfg($"/setdcvalueindex SCHEME_CURRENT {PWR_SUBGRP} {PWR_SETTING} 2");
+            RunPowercfg("/setactive SCHEME_CURRENT");
         }
 
         // --- Firewall Whitelist ---

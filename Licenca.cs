@@ -123,13 +123,13 @@ namespace MacroSupremes
             };
             var lblSub = new Label
             {
-                Text = "Use o telefone do WhatsApp da guilda e crie uma senha.",
-                ForeColor = DIM,
+                Text = "Use o MESMO número de celular que você usa no grupo\ndo WhatsApp da guild. Depois é só criar uma senha.",
+                ForeColor = TXT,
                 AutoSize = true,
-                Location = new Point(24, 54),
+                Location = new Point(24, 50),
             };
 
-            var lblPhone = new Label { Text = "Telefone (com DDD)", ForeColor = DIM, AutoSize = true, Location = new Point(24, 88) };
+            var lblPhone = new Label { Text = "Celular do grupo da guild (com DDD)", ForeColor = DIM, AutoSize = true, Location = new Point(24, 88) };
             txtPhone = NovoInput(24, 108);
             txtPhone.PlaceholderText = "Ex: 19 99999-8888";
 
