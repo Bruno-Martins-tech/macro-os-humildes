@@ -1,0 +1,5 @@
+# Cache local do wrangler / builds
+.wrangler/
+node_modules/
+dist/
+*.log

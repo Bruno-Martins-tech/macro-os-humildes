@@ -1,0 +1,22 @@
+name = "macro-supremes"
+main = "src/worker.js"
+compatibility_date = "2024-11-01"
+
+# Banco D1 (SQLite). O database_id sai de: wrangler d1 create macro-supremes
+[[d1_databases]]
+binding = "DB"
+database_name = "macro-supremes"
+database_id = "dcd90eb1-bcf7-4234-b4e0-c18196583dd8"
+
+# Vigia de patch do WYD: roda toda quinta 12:00 UTC (~09:00 BRT).
+# Compara a pagina de updates e, se mudou, avisa no Discord.
+[triggers]
+crons = ["0 12 * * 4"]
+
+[vars]
+# URL da pagina oficial de updates do WYD (checada pelo cron).
+WYD_UPDATES_URL = "https://wydglobal.raidhut.com/pt-br/3578"
+
+# Segredos (NAO ficam aqui; setar via wrangler secret put):
+#   wrangler secret put DISCORD_WEBHOOK_URL   -> webhook do canal do Discord da guild
+#   wrangler secret put ADMIN_TOKEN           -> token pras rotas /admin (moderar contas)
