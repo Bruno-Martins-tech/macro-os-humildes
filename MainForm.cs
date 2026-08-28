@@ -2198,9 +2198,9 @@ namespace MacroSupremes
                 Text = "Discord",
                 Location = new Point(16, 8),
                 Size = new Size(90, 28),
-                BaseColor = Color.FromArgb(34, 36, 46),
-                HoverColor = Color.FromArgb(46, 48, 60),
-                ForeColor = TEXT_SECONDARY,
+                BaseColor = Color.FromArgb(88, 101, 242),
+                HoverColor = Color.FromArgb(105, 118, 255),
+                ForeColor = Color.White,
                 Radius = 6,
                 Font = new Font("Segoe UI", 8, FontStyle.Bold)
             };
@@ -2219,9 +2219,9 @@ namespace MacroSupremes
                 Text = "Droplist",
                 Location = new Point(112, 8),
                 Size = new Size(90, 28),
-                BaseColor = Color.FromArgb(34, 36, 46),
-                HoverColor = Color.FromArgb(46, 48, 60),
-                ForeColor = TEXT_SECONDARY,
+                BaseColor = Color.FromArgb(196, 124, 38),
+                HoverColor = Color.FromArgb(220, 142, 46),
+                ForeColor = Color.White,
                 Radius = 6,
                 Font = new Font("Segoe UI", 8, FontStyle.Bold)
             };
@@ -2234,9 +2234,9 @@ namespace MacroSupremes
                 Text = "Updates WYD",
                 Location = new Point(208, 8),
                 Size = new Size(110, 28),
-                BaseColor = Color.FromArgb(34, 36, 46),
-                HoverColor = Color.FromArgb(46, 48, 60),
-                ForeColor = TEXT_SECONDARY,
+                BaseColor = Color.FromArgb(56, 132, 68),
+                HoverColor = Color.FromArgb(66, 156, 80),
+                ForeColor = Color.White,
                 Radius = 6,
                 Font = new Font("Segoe UI", 8, FontStyle.Bold)
             };
