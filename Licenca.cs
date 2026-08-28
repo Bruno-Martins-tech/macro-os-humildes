@@ -222,4 +222,74 @@ namespace MacroSupremes
         private void Msg(string m) { lblMsg.ForeColor = m == "Conectando..." ? DIM : Color.FromArgb(240, 120, 120); lblMsg.Text = m; }
         private void Habilitar(bool on) { btnEntrar.Enabled = on; btnCriar.Enabled = on; txtPhone.Enabled = on; txtSenha.Enabled = on; }
     }
+
+    // ======================================================================
+    // BOAS-VINDAS (primeira vez): explica em 3 passos como criar um macro
+    // ======================================================================
+    internal sealed class BoasVindasForm : Form
+    {
+        private static readonly Color BG = Color.FromArgb(24, 26, 32);
+        private static readonly Color GOLD = Color.FromArgb(212, 175, 55);
+        private static readonly Color TXT = Color.FromArgb(230, 232, 238);
+        private static readonly Color DIM = Color.FromArgb(160, 162, 172);
+
+        public BoasVindasForm()
+        {
+            Text = "Bem-vindo" + Canal.SufixoTitulo;
+            ClientSize = new Size(452, 356);
+            FormBorderStyle = FormBorderStyle.FixedDialog;
+            MaximizeBox = false;
+            MinimizeBox = false;
+            StartPosition = FormStartPosition.CenterParent;
+            BackColor = BG;
+            ForeColor = TXT;
+            Font = new Font("Segoe UI", 9.5f);
+
+            var titulo = new Label
+            {
+                Text = "Bem-vindo à Guilda Supremus!",
+                Font = new Font("Segoe UI", 16, FontStyle.Bold),
+                ForeColor = GOLD,
+                AutoSize = true,
+                Location = new Point(24, 22),
+            };
+            var sub = new Label
+            {
+                Text = "Criar seu primeiro macro leva 3 passos:",
+                ForeColor = DIM,
+                AutoSize = true,
+                Location = new Point(24, 58),
+            };
+            var passos = new Label
+            {
+                Text =
+                    "①   Escolha um macro na lista à esquerda (ex: Auto Pergaminho).\n\n" +
+                    "②   Clique em Gravar, espere o 3·2·1 e faça no jogo o que\n" +
+                    "      quer repetir. Aperte ESC para parar.\n\n" +
+                    "③   Use Testar pra conferir e Salvar. Depois é só apertar a\n" +
+                    "      tecla de atalho com o jogo aberto.",
+                ForeColor = TXT,
+                Location = new Point(24, 92),
+                Size = new Size(404, 200),
+                Font = new Font("Segoe UI", 10.5f),
+            };
+
+            var btn = new Button
+            {
+                Text = "Começar",
+                Location = new Point(24, 306),
+                Size = new Size(404, 36),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = GOLD,
+                ForeColor = Color.FromArgb(10, 10, 10),
+                Font = new Font("Segoe UI", 10, FontStyle.Bold),
+                Cursor = Cursors.Hand,
+            };
+            btn.FlatAppearance.BorderSize = 0;
+            btn.Click += (s, e) => { DialogResult = DialogResult.OK; Close(); };
+
+            Controls.AddRange(new Control[] { titulo, sub, passos, btn });
+            AcceptButton = btn;
+        }
+    }
 }

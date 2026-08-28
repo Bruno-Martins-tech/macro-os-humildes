@@ -90,6 +90,10 @@ namespace MacroSupremes
         // Volume da musica do WYD (0-1000 do MCI). Default baixinho.
         [JsonPropertyName("volumeMusica")]
         public int VolumeMusica { get; set; } = 150;
+
+        // Onboarding: mostra a tela de boas-vindas so na primeira vez.
+        [JsonPropertyName("jaViuBoasVindas")]
+        public bool JaViuBoasVindas { get; set; }
     }
 
     public class Biblioteca
@@ -1403,7 +1407,7 @@ namespace MacroSupremes
 
             var sb = new System.Text.StringBuilder();
             sb.AppendLine("========================================");
-            sb.AppendLine("  RELATORIO ANTI-DC - MACRO SUPREMES");
+            sb.AppendLine("  RELATORIO ANTI-DC - MACRO SUPREMUS");
             sb.AppendLine($"  Data: {hoje}");
             sb.AppendLine("========================================");
             sb.AppendLine();
@@ -1846,7 +1850,7 @@ namespace MacroSupremes
 
         public MainForm()
         {
-            Text = "MACRO \u2022 SUPREMES  \u2014  With Your Destiny" + Canal.SufixoTitulo;
+            Text = "MACRO \u2022 SUPREMUS  \u2014  With Your Destiny" + Canal.SufixoTitulo;
             tituloBase = Text;
             ClientSize = new Size(620, 720);
             FormBorderStyle = FormBorderStyle.FixedSingle;
@@ -1932,7 +1936,7 @@ namespace MacroSupremes
                 // Wordmark da guilda ao fundo (sutil): profundidade + cara "brasonada" medieval
                 using (var fontWm = new Font("Segoe UI", 30, FontStyle.Bold | FontStyle.Italic))
                 using (var brWm = new SolidBrush(Color.FromArgb(20, 212, 175, 55)))
-                    g.DrawString("SUPREMES", fontWm, brWm, pnlHeader.Width - 305, 22);
+                    g.DrawString("SUPREMUS", fontWm, brWm, pnlHeader.Width - 305, 22);
 
                 // Linha de acento dourada embaixo (referencia ao ouro WYD)
                 using var goldPen = new Pen(Color.FromArgb(110, 212, 175, 55), 2);
@@ -1951,14 +1955,14 @@ namespace MacroSupremes
                 // Titulo com estilo WYD
                 using var fontTitulo = new Font("Segoe UI", 17, FontStyle.Bold);
                 using var brushGoldShadow = new SolidBrush(Color.FromArgb(40, 212, 175, 55));
-                g.DrawString("MACRO \u2022 SUPREMES", fontTitulo, brushGoldShadow, textX + 1, by + 5);
+                g.DrawString("MACRO \u2022 SUPREMUS", fontTitulo, brushGoldShadow, textX + 1, by + 5);
                 using var brushTitle = new SolidBrush(TEXT_PRIMARY);
-                g.DrawString("MACRO \u2022 SUPREMES", fontTitulo, brushTitle, textX, by + 4);
+                g.DrawString("MACRO \u2022 SUPREMUS", fontTitulo, brushTitle, textX, by + 4);
 
                 // Subtitulo (uma linha so, enxuto)
                 using var fontSub = new Font("Segoe UI", 9);
                 using var brushSub = new SolidBrush(Color.FromArgb(212, 175, 55));
-                g.DrawString("Guilda Supremes \u2022 WYD Server 3", fontSub, brushSub, textX + 2, by + 34);
+                g.DrawString("Guilda Supremus \u2022 WYD Server 3", fontSub, brushSub, textX + 2, by + 34);
 
                 // Runas nordicas (cara medieval), sutis em dourado. Segoe UI Historic cobre o bloco Runic.
                 using var fontRune = new Font("Segoe UI Historic", 11);
@@ -2276,7 +2280,7 @@ namespace MacroSupremes
 
             var lblCreditos = new Label
             {
-                Text = "Criado por MartinS- \u2022 Supremes \u2022 Server 3",
+                Text = "Criado por MartinS- \u2022 Supremus \u2022 Server 3",
                 Location = new Point(340, 8),
                 AutoSize = true,
                 ForeColor = TEXT_SECONDARY,
@@ -3548,10 +3552,11 @@ namespace MacroSupremes
             return pnlItem;
         }
 
-        // Fonte reutilizada no desenho da lista (evita alocar um Font por item a cada redesenho)
+        // Fontes reutilizadas no desenho da lista (evita alocar por item a cada redesenho)
         private static readonly Font FonteListaMacros = new("Segoe UI", 9.5f);
+        private static readonly Font FonteBadge = new("Segoe UI", 8f, FontStyle.Bold);
 
-        // Desenho customizado da ListBox
+        // Desenho customizado da ListBox: bolinha de status + nome + badge do atalho
         private void LstMacros_DrawItem(object? sender, DrawItemEventArgs e)
         {
             if (e.Index < 0) return;
@@ -3560,21 +3565,44 @@ namespace MacroSupremes
             g.SmoothingMode = SmoothingMode.AntiAlias;
 
             bool selected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
-            Color bg = selected ? Color.FromArgb(50, ACCENT_GREEN.R, ACCENT_GREEN.G, ACCENT_GREEN.B) : BG_INPUT;
-            Color fg = selected ? ACCENT_GREEN : TEXT_PRIMARY;
+            Color bg = selected ? Color.FromArgb(46, ACCENT_GOLD.R, ACCENT_GOLD.G, ACCENT_GOLD.B) : BG_INPUT;
+            Color fg = selected ? ACCENT_GOLD : TEXT_PRIMARY;
 
-            using var bgBrush = new SolidBrush(bg);
-            g.FillRectangle(bgBrush, e.Bounds);
+            using (var bgBrush = new SolidBrush(bg))
+                g.FillRectangle(bgBrush, e.Bounds);
 
             if (selected)
-            {
-                using var accentPen = new Pen(ACCENT_GREEN, 2);
-                g.DrawLine(accentPen, e.Bounds.X, e.Bounds.Y, e.Bounds.X, e.Bounds.Bottom);
-            }
+                using (var accentPen = new Pen(ACCENT_GOLD, 2))
+                    g.DrawLine(accentPen, e.Bounds.X, e.Bounds.Y, e.Bounds.X, e.Bounds.Bottom);
 
-            string text = lstMacros.Items[e.Index].ToString() ?? "";
-            using var textBrush = new SolidBrush(fg);
-            g.DrawString(text, FonteListaMacros, textBrush, e.Bounds.X + 10, e.Bounds.Y + 6);
+            Macro? macro = e.Index < biblioteca.Macros.Count ? biblioteca.Macros[e.Index] : null;
+            int cy = e.Bounds.Y + e.Bounds.Height / 2;
+
+            // Bolinha de status: verde = ja tem acoes gravadas; cinza = vazio (falta gravar)
+            bool temAcoes = macro != null && macro.Eventos.Count > 0;
+            using (var dotB = new SolidBrush(temAcoes ? ACCENT_GREEN : Color.FromArgb(96, 98, 108)))
+                g.FillEllipse(dotB, e.Bounds.X + 12, cy - 4, 8, 8);
+
+            // Nome do macro (centralizado na vertical)
+            string nome = macro?.Name ?? (lstMacros.Items[e.Index].ToString() ?? "");
+            using (var textBrush = new SolidBrush(fg))
+            using (var sfV = new StringFormat { LineAlignment = StringAlignment.Center, Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap })
+                g.DrawString(nome, FonteListaMacros, textBrush,
+                    new RectangleF(e.Bounds.X + 28, e.Bounds.Y, e.Bounds.Width - 90, e.Bounds.Height), sfV);
+
+            // Badge do atalho (F5, F6...) a direita
+            if (macro != null && !string.IsNullOrEmpty(macro.Hotkey))
+            {
+                var sz = g.MeasureString(macro.Hotkey, FonteBadge);
+                int bw = (int)sz.Width + 12, bh = 17;
+                int bxr = e.Bounds.Right - bw - 10, byr = cy - bh / 2;
+                using (var badgeBg = new SolidBrush(Color.FromArgb(64, ACCENT_GOLD.R, ACCENT_GOLD.G, ACCENT_GOLD.B)))
+                using (var path = Gfx.RoundedRect(new Rectangle(bxr, byr, bw, bh), 5))
+                    g.FillPath(badgeBg, path);
+                using (var badgeTx = new SolidBrush(ACCENT_GOLD))
+                using (var sfC = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
+                    g.DrawString(macro.Hotkey, FonteBadge, badgeTx, new RectangleF(bxr, byr, bw, bh), sfC);
+            }
         }
 
         // Helpers
@@ -4321,6 +4349,18 @@ namespace MacroSupremes
                 return;
             }
             base.WndProc(ref m);
+        }
+
+        protected override void OnShown(EventArgs e)
+        {
+            base.OnShown(e);
+            // Onboarding: so na primeira vez que o app abre
+            if (!biblioteca.Config.JaViuBoasVindas)
+            {
+                try { using var f = new BoasVindasForm(); f.ShowDialog(this); } catch { }
+                biblioteca.Config.JaViuBoasVindas = true;
+                SalvarBiblioteca();
+            }
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)
