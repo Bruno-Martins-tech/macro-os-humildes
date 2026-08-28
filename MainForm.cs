@@ -2155,7 +2155,7 @@ namespace MacroSupremes
             bool hackAtivo = ProxyHack.IsAtivo();
             var btnHackFixo = new ModernButton
             {
-                Text = hackAtivo ? "⚡ Hack Login Server Full: ATIVO" : "⚡ Hack Login Server Full: OFF",
+                Text = hackAtivo ? "⚡ Entrar no servidor lotado: ATIVO" : "⚡ Entrar no servidor lotado: OFF",
                 Location = new Point(286, 6),
                 Size = new Size(318, 28),
                 BaseColor = hackAtivo ? Color.FromArgb(40, 140, 40) : Color.FromArgb(52, 44, 30),
@@ -2169,20 +2169,20 @@ namespace MacroSupremes
                 if (ProxyHack.IsAtivo())
                 {
                     ProxyHack.Desativar();
-                    btnHackFixo.Text = "⚡ Hack Login Server Full: OFF";
+                    btnHackFixo.Text = "⚡ Entrar no servidor lotado: OFF";
                     btnHackFixo.BaseColor = Color.FromArgb(52, 44, 30);
                     btnHackFixo.HoverColor = Color.FromArgb(70, 58, 38);
                     btnHackFixo.AccentColor = Color.FromArgb(150, 90, 30);
-                    AtualizarStatus("Proxy desligado. Conexao normal.", ACCENT_GREEN);
+                    AtualizarStatus("Entrada normal restaurada.", ACCENT_GREEN);
                 }
                 else
                 {
                     ProxyHack.Ativar();
-                    btnHackFixo.Text = "⚡ Hack Login Server Full: ATIVO";
+                    btnHackFixo.Text = "⚡ Entrar no servidor lotado: ATIVO";
                     btnHackFixo.BaseColor = Color.FromArgb(40, 140, 40);
                     btnHackFixo.HoverColor = Color.FromArgb(50, 170, 50);
                     btnHackFixo.AccentColor = ACCENT_GREEN;
-                    AtualizarStatus("Proxy ativado! Logue no WYD e depois desligue aqui.", ACCENT_YELLOW);
+                    AtualizarStatus("Ativado! Entre no WYD e depois desligue aqui.", ACCENT_YELLOW);
                 }
                 btnHackFixo.Invalidate();
             };
