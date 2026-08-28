@@ -4,7 +4,7 @@ AppVersion=1.12.0
 AppPublisher=Supremus Guild
 AppPublisherURL=https://github.com/Bruno-Martins-tech/macro-os-humildes
 DefaultDirName={autopf}\MacroSupremes
-DefaultGroupName=Macro Supremes
+DefaultGroupName=Macro Supremus
 UninstallDisplayIcon={app}\MacroSupremes.exe
 OutputDir=dist
 OutputBaseFilename=MacroSupremes-Setup
@@ -25,18 +25,18 @@ Source: "bin\Release\net8.0-windows\win-x64\publish\MacroSupremes.exe"; DestDir:
 Source: "bin\Release\net8.0-windows\win-x64\publish\brasao.jpg"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{commondesktop}\Macro Supremes"; Filename: "{app}\MacroSupremes.exe"; IconFilename: "{app}\MacroSupremes.exe"; Comment: "Macro Supremes - WYD Global"
-Name: "{group}\Macro Supremes"; Filename: "{app}\MacroSupremes.exe"
-Name: "{group}\Desinstalar Macro Supremes"; Filename: "{uninstallexe}"
+Name: "{commondesktop}\Macro Supremus"; Filename: "{app}\MacroSupremes.exe"; IconFilename: "{app}\MacroSupremes.exe"; Comment: "Macro Supremus - WYD Global"
+Name: "{group}\Macro Supremus"; Filename: "{app}\MacroSupremes.exe"
+Name: "{group}\Desinstalar Macro Supremus"; Filename: "{uninstallexe}"
 
 [Run]
-Filename: "{app}\MacroSupremes.exe"; Description: "Abrir Macro Supremes"; Flags: nowait postinstall skipifsilent runascurrentuser
+Filename: "{app}\MacroSupremes.exe"; Description: "Abrir Macro Supremus"; Flags: nowait postinstall skipifsilent runascurrentuser
 
 [Messages]
-WelcomeLabel1=Macro Supremes
-WelcomeLabel2=Vai instalar o Macro Supremes no seu PC.%n%nE rapido, so clicar em Instalar.
+WelcomeLabel1=Macro Supremus
+WelcomeLabel2=Vai instalar o Macro Supremus no seu PC.%n%nE rapido, so clicar em Instalar.
 FinishedHeadingLabel=Pronto!
-FinishedLabel=Macro Supremes foi instalado. O atalho ja esta na sua area de trabalho.
+FinishedLabel=Macro Supremus foi instalado. O atalho ja esta na sua area de trabalho.
 ButtonInstall=Instalar
 ButtonFinish=Fechar
 
