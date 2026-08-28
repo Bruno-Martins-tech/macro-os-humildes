@@ -240,6 +240,10 @@ export default {
     try {
       if (p === '/' || p === '/health') return json({ ok: true, service: 'macro-supremes' });
 
+      // Painel de admin (HTML). A pagina e publica; os dados exigem o ADMIN_TOKEN digitado nela.
+      if (p === '/admin' && m === 'GET')
+        return new Response(ADMIN_HTML, { headers: { 'content-type': 'text/html; charset=utf-8' } });
+
       if (p === '/heartbeat' && m === 'POST') return await handleHeartbeat(request, env);
       if (p === '/license/register' && m === 'POST') return await handleRegister(request, env);
       if (p === '/license/validate' && m === 'POST') return await handleValidate(request, env);
@@ -262,3 +266,115 @@ export default {
     ctx.waitUntil(checarPatchWyd(env));
   },
 };
+
+// ---------------------------------------------------------------------------
+// PAINEL DE ADMIN (HTML servido pelo Worker)
+// ---------------------------------------------------------------------------
+const ADMIN_HTML = `<!doctype html>
+<html lang="pt-br"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Macro Supremes - Admin</title>
+<style>
+  :root{--bg:#16181e;--card:#262830;--in:#1e2028;--gr:#4cd964;--ye:#e2b23a;--rd:#e05252;--tx:#e6e8ee;--dim:#9698a0}
+  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.4 Segoe UI,system-ui,sans-serif}
+  header{padding:16px 20px;border-bottom:1px solid #2c2f38;display:flex;align-items:center;gap:12px}
+  header h1{font-size:17px;margin:0;color:var(--gr)} header .sub{color:var(--dim);font-size:12px}
+  .wrap{max-width:1000px;margin:0 auto;padding:20px}
+  .row{display:flex;gap:10px;flex-wrap:wrap}
+  input,button{font:14px Segoe UI,sans-serif;border-radius:6px;border:1px solid #333;padding:8px 12px}
+  input{background:var(--in);color:var(--tx);min-width:280px}
+  button{background:#3a3d48;color:var(--tx);cursor:pointer;border:0} button:hover{background:#474b58}
+  button.p{background:var(--gr);color:#0a0a0a;font-weight:700}
+  .cards{display:flex;gap:12px;flex-wrap:wrap;margin:18px 0}
+  .c{background:var(--card);border-radius:10px;padding:14px 18px;min-width:130px}
+  .c .n{font-size:26px;font-weight:700} .c .l{color:var(--dim);font-size:12px}
+  table{width:100%;border-collapse:collapse;margin-top:10px;background:var(--card);border-radius:10px;overflow:hidden}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid #2c2f38;font-size:13px}
+  th{color:var(--dim);font-weight:600;font-size:11px;text-transform:uppercase}
+  .tag{padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700}
+  .tag.a{background:rgba(76,217,100,.15);color:var(--gr)} .tag.r{background:rgba(224,82,82,.15);color:var(--rd)}
+  .mut{color:var(--dim);font-family:Consolas,monospace;font-size:12px}
+  .act button{padding:5px 9px;font-size:12px;margin-right:6px}
+  h2{font-size:13px;color:var(--dim);text-transform:uppercase;margin:24px 0 4px}
+  #msg{color:var(--ye);min-height:18px;margin-top:8px}
+</style></head>
+<body>
+<header><h1>Macro Supremes</h1><span class="sub">Painel de Admin</span></header>
+<div class="wrap">
+  <div class="row">
+    <input id="tk" type="password" placeholder="Cole o ADMIN_TOKEN aqui" autocomplete="off">
+    <button class="p" onclick="entrar()">Entrar</button>
+    <button onclick="carregar()">Atualizar</button>
+  </div>
+  <div id="msg"></div>
+  <div class="cards" id="cards"></div>
+  <h2>Contas cadastradas</h2>
+  <div id="accs"></div>
+  <h2>Ativos por dia (14 dias)</h2>
+  <div id="dau"></div>
+  <h2>Versoes em uso (30 dias)</h2>
+  <div id="vers"></div>
+</div>
+<script>
+  var BASE = location.origin;
+  function tk(){ return localStorage.getItem('tk') || ''; }
+  function entrar(){ localStorage.setItem('tk', document.getElementById('tk').value.trim()); carregar(); }
+  function msg(m){ document.getElementById('msg').textContent = m || ''; }
+  function esc(s){ return (s==null?'':String(s)).replace(/[&<>]/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c];}); }
+  async function api(path, opts){
+    opts = opts || {}; opts.headers = Object.assign({'authorization':'Bearer '+tk()}, opts.headers||{});
+    var r = await fetch(BASE+path, opts);
+    if(r.status===401){ msg('Token invalido ou nao informado.'); throw new Error('401'); }
+    return r.json();
+  }
+  async function carregar(){
+    if(!tk()){ msg('Cole o ADMIN_TOKEN e clique Entrar.'); return; }
+    msg('Carregando...');
+    try{
+      var s = await api('/admin/stats');
+      var t = s.totais||{};
+      document.getElementById('cards').innerHTML =
+        card(t.ativos_hoje,'Ativos hoje')+card(t.instalacoes,'Instalacoes')+
+        card(t.contas_ativas,'Contas ativas')+card(t.contas_revogadas,'Revogadas');
+      document.getElementById('dau').innerHTML = tabela(['Dia','Ativos'], (s.dau||[]).map(function(d){return [d.day, d.ativos];}));
+      document.getElementById('vers').innerHTML = tabela(['Versao','Canal','Aparelhos'], (s.versoes||[]).map(function(v){return [v.version||'-', v.channel||'-', v.n];}));
+      var a = await api('/admin/accounts');
+      renderAccs(a.accounts||[]);
+      msg('');
+    }catch(e){ if(e.message!=='401') msg('Erro: '+e.message); }
+  }
+  function card(n,l){ return '<div class="c"><div class="n">'+(n==null?0:n)+'</div><div class="l">'+l+'</div></div>'; }
+  function tabela(cols, rows){
+    if(!rows.length) return '<div class="mut" style="padding:10px">Sem dados.</div>';
+    var h='<table><tr>'+cols.map(function(c){return '<th>'+c+'</th>';}).join('')+'</tr>';
+    h+=rows.map(function(r){return '<tr>'+r.map(function(c){return '<td>'+esc(c)+'</td>';}).join('')+'</tr>';}).join('');
+    return h+'</table>';
+  }
+  function renderAccs(list){
+    if(!list.length){ document.getElementById('accs').innerHTML='<div class="mut" style="padding:10px">Ninguem cadastrado ainda.</div>'; return; }
+    var h='<table><tr><th>Telefone</th><th>Status</th><th>Nome</th><th>Maquina</th><th>Criado</th><th>Ultimo login</th><th>Acoes</th></tr>';
+    h+=list.map(function(a){
+      var st = a.status==='revoked' ? '<span class="tag r">revogado</span>' : '<span class="tag a">ativo</span>';
+      var mac = a.machine ? '<span class="mut">'+esc(String(a.machine).slice(0,10))+'...</span>' : '<span class="mut">-</span>';
+      var acts = '<div class="act">'+
+        (a.status==='revoked'
+          ? '<button onclick="setStatus(\\''+a.phone+'\\',\\'active\\')">Reativar</button>'
+          : '<button onclick="setStatus(\\''+a.phone+'\\',\\'revoked\\')">Revogar</button>')+
+        '<button onclick="resetMaquina(\\''+a.phone+'\\')">Resetar PC</button></div>';
+      return '<tr><td>'+esc(a.phone)+'</td><td>'+st+'</td><td>'+esc(a.nome)+'</td><td>'+mac+'</td><td class="mut">'+esc((a.created_at||'').slice(0,10))+'</td><td class="mut">'+esc((a.last_login||'').slice(0,16).replace('T',' '))+'</td><td>'+acts+'</td></tr>';
+    }).join('');
+    document.getElementById('accs').innerHTML = h+'</table>';
+  }
+  async function setStatus(phone, status){
+    await api('/admin/revoke',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({phone:phone,status:status})});
+    carregar();
+  }
+  async function resetMaquina(phone){
+    if(!confirm('Desamarrar a maquina de '+phone+'? Ele podera logar em outro PC.')) return;
+    await api('/admin/reset-machine',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({phone:phone})});
+    carregar();
+  }
+  document.getElementById('tk').value = tk();
+  if(tk()) carregar();
+</script>
+</body></html>`;

@@ -86,6 +86,10 @@ namespace MacroSupremes
 
         [JsonPropertyName("velocidade")]
         public double Velocidade { get; set; } = 1.0;
+
+        // Volume da musica do WYD (0-1000 do MCI). Default baixinho.
+        [JsonPropertyName("volumeMusica")]
+        public int VolumeMusica { get; set; } = 150;
     }
 
     public class Biblioteca
@@ -2075,7 +2079,7 @@ namespace MacroSupremes
             {
                 Text = "Pronto",
                 Location = new Point(32, 10),
-                Size = new Size(300, 20),
+                Size = new Size(240, 20),
                 ForeColor = ACCENT_GREEN,
                 Font = new Font("Segoe UI", 9, FontStyle.Bold),
                 Tag = pnlDot // guardar referencia pra repintar o dot
@@ -2087,9 +2091,9 @@ namespace MacroSupremes
             bool hackAtivo = ProxyHack.IsAtivo();
             var btnHackFixo = new ModernButton
             {
-                Text = hackAtivo ? "⚡ Hack de login: ATIVO" : "⚡ Hack de login: desligado",
-                Location = new Point(360, 6),
-                Size = new Size(244, 28),
+                Text = hackAtivo ? "⚡ Hack Login Server Full: ATIVO" : "⚡ Hack Login Server Full: OFF",
+                Location = new Point(286, 6),
+                Size = new Size(318, 28),
                 BaseColor = hackAtivo ? Color.FromArgb(40, 140, 40) : Color.FromArgb(52, 44, 30),
                 HoverColor = hackAtivo ? Color.FromArgb(50, 170, 50) : Color.FromArgb(70, 58, 38),
                 AccentColor = hackAtivo ? ACCENT_GREEN : Color.FromArgb(150, 90, 30),
@@ -2101,7 +2105,7 @@ namespace MacroSupremes
                 if (ProxyHack.IsAtivo())
                 {
                     ProxyHack.Desativar();
-                    btnHackFixo.Text = "⚡ Hack de login: desligado";
+                    btnHackFixo.Text = "⚡ Hack Login Server Full: OFF";
                     btnHackFixo.BaseColor = Color.FromArgb(52, 44, 30);
                     btnHackFixo.HoverColor = Color.FromArgb(70, 58, 38);
                     btnHackFixo.AccentColor = Color.FromArgb(150, 90, 30);
@@ -2110,7 +2114,7 @@ namespace MacroSupremes
                 else
                 {
                     ProxyHack.Ativar();
-                    btnHackFixo.Text = "⚡ Hack de login: ATIVO";
+                    btnHackFixo.Text = "⚡ Hack Login Server Full: ATIVO";
                     btnHackFixo.BaseColor = Color.FromArgb(40, 140, 40);
                     btnHackFixo.HoverColor = Color.FromArgb(50, 170, 50);
                     btnHackFixo.AccentColor = ACCENT_GREEN;
@@ -2793,8 +2797,70 @@ namespace MacroSupremes
             };
             cardVelocidade.Controls.Add(lblVelLabels);
 
-            // Card — Hack Login Server Full
-            // O "Hack de login" saiu daqui: virou botao FIXO na barra de status (sempre visivel).
+            // O "Hack Login Server Full" saiu daqui: virou botao FIXO na barra de status (sempre visivel).
+
+            // Card — Som / Musica
+            var cardSom = new CardPanel
+            {
+                Location = new Point(16, 370),
+                Size = new Size(588, 92),
+                CardColor = BG_CARD
+            };
+            pnlConfig.Controls.Add(cardSom);
+
+            var lblTitSom = new Label
+            {
+                Text = "SOM / MUSICA",
+                Location = new Point(16, 14),
+                AutoSize = true,
+                ForeColor = TEXT_SECONDARY,
+                Font = new Font("Segoe UI", 8, FontStyle.Bold),
+                BackColor = Color.Transparent
+            };
+            cardSom.Controls.Add(lblTitSom);
+
+            var lblDescSom = new Label
+            {
+                Text = "Volume da musica do WYD (login.mp3). Use o botao ♫ da barra de cima para mutar.",
+                Location = new Point(16, 36),
+                Size = new Size(550, 18),
+                ForeColor = TEXT_DIM,
+                Font = new Font("Segoe UI", 8),
+                BackColor = Color.Transparent
+            };
+            cardSom.Controls.Add(lblDescSom);
+
+            var trkVolume = new TrackBar
+            {
+                Location = new Point(16, 58),
+                Size = new Size(420, 30),
+                Minimum = 0,
+                Maximum = 100,
+                Value = Math.Clamp(biblioteca.Config.VolumeMusica / 10, 0, 100),
+                TickFrequency = 10,
+                SmallChange = 5,
+                LargeChange = 10,
+                BackColor = BG_CARD
+            };
+            var lblVolValor = new Label
+            {
+                Text = $"{Math.Clamp(biblioteca.Config.VolumeMusica / 10, 0, 100)}%",
+                Location = new Point(445, 60),
+                AutoSize = true,
+                ForeColor = ACCENT_YELLOW,
+                Font = new Font("Segoe UI", 14, FontStyle.Bold),
+                BackColor = Color.Transparent
+            };
+            trkVolume.ValueChanged += (s, ev) =>
+            {
+                int vol1000 = trkVolume.Value * 10; // 0-100 -> 0-1000 (escala do MCI)
+                biblioteca.Config.VolumeMusica = vol1000;
+                lblVolValor.Text = $"{trkVolume.Value}%";
+                if (!musicaMutada) MciPlayer.SetVolume(vol1000); // aplica na hora
+                SalvarBibliotecaDebounced();
+            };
+            cardSom.Controls.Add(trkVolume);
+            cardSom.Controls.Add(lblVolValor);
         }
 
         private void CriarPaginaAntiDC()
@@ -3371,7 +3437,7 @@ namespace MacroSupremes
             if (!string.IsNullOrEmpty(musica))
             {
                 MciPlayer.Abrir(musica);
-                MciPlayer.SetVolume(150); // volume baixinho (0-1000)
+                MciPlayer.SetVolume(Math.Clamp(biblioteca.Config.VolumeMusica, 0, 1000));
                 MciPlayer.Tocar(loop: true);
             }
         }

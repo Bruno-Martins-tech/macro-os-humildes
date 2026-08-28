@@ -17,6 +17,13 @@ Um Worker (free tier) que cobre **telemetria de uso**, **licenciamento** (telefo
 
 Cron `0 12 * * 4` (quinta ~09h BRT): compara a pagina de updates do WYD; se mudou, posta no Discord.
 
+## Painel de Admin (visao do dono)
+
+Abra no navegador: **https://macro-supremes.bno-bmartins.workers.dev/admin**
+Cole o `ADMIN_TOKEN` e clique Entrar. Mostra quem cadastrou, ativos por dia, versoes em uso,
+e deixa **revogar/reativar** conta e **resetar a maquina** (quando a pessoa troca de PC) com um clique.
+O token fica salvo no navegador (localStorage) so nesse aparelho.
+
 ## Deploy (primeira vez)
 
 ```bash
